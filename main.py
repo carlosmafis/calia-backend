@@ -43,17 +43,12 @@ def get_current_user(authorization: str = Header(None)):
 
     token = authorization.split(" ")[1]
 
-    try:
-        payload = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated"
-        )
-    except Exception:
+    user_response = supabase.auth.get_user(token)
+
+    if not user_response.user:
         raise HTTPException(status_code=401, detail="Token inválido")
 
-    user_id = payload.get("sub")
+    user_id = user_response.user.id
 
     user_profile = supabase.table("profiles") \
         .select("*") \
