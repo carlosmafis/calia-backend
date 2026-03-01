@@ -160,3 +160,7 @@ def debug_login(email: str, password: str):
         "password": password
     })
     return response
+
+@app.get("/debug-token")
+def debug_token(authorization: str = Header(None)):
+    return {"header_recebido": authorization}
