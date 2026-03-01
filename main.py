@@ -157,3 +157,11 @@ def list_students(user=Depends(get_current_user)):
         .execute()
 
     return students.data
+
+@app.post("/debug-login")
+def debug_login(email: str, password: str):
+    response = supabase.auth.sign_in_with_password({
+        "email": email,
+        "password": password
+    })
+    return response
