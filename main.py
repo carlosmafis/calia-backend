@@ -37,11 +37,12 @@ class StudentCreate(BaseModel):
 # AUTENTICAÇÃO
 # ----------------------------------------------------
 
-def get_current_user(authorization: str = Header(None)):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Token ausente")
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-    token = authorization.split(" ")[1]
+security = HTTPBearer()
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
 
     user_response = supabase.auth.get_user(token)
 
