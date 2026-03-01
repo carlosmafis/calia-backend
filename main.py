@@ -44,16 +44,18 @@ security = HTTPBearer()
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
 
-    user_response = supabase.auth.get_user(token)
+    try:
+        user_response = supabase.auth.get_user(token)
+        user_data = user_response.user
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Erro ao validar token: {str(e)}")
 
-    if not user_response.user:
+    if not user_data:
         raise HTTPException(status_code=401, detail="Token inválido")
-
-    user_id = user_response.user.id
 
     user_profile = supabase.table("profiles") \
         .select("*") \
-        .eq("id", user_id) \
+        .eq("id", user_data.id) \
         .execute()
 
     if not user_profile.data:
