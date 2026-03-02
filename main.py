@@ -1,3 +1,6 @@
+from fastapi import UploadFile, File
+import shutil
+import uuid
 import os
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -198,6 +201,39 @@ def list_teachers(user=Depends(get_current_user)):
         .eq("school_id", user["school_id"]) \
         .eq("role", "professor") \
         .execute().data
+@app.post("/ocr-upload")
+async def ocr_upload(file: UploadFile = File(...), user=Depends(get_current_user)):
+
+    if user["role"] != "professor":
+        raise HTTPException(status_code=403, detail="Apenas professor pode usar OCR")
+
+    # 1️⃣ Salvar arquivo temporariamente
+    file_id = str(uuid.uuid4())
+    file_path = f"/tmp/{file_id}_{file.filename}"
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 2️⃣ Aqui você coloca seu módulo OCR antigo
+    # Por enquanto vamos simular OCR
+    extracted_text = f"Texto extraído simulado do arquivo {file.filename}"
+
+    # 3️⃣ Salvar no banco
+    supabase.table("ocr_uploads").insert({
+        "school_id": user["school_id"],
+        "uploaded_by": user["id"],
+        "file_url": file.filename,
+        "extracted_text": extracted_text,
+        "status": "completed"
+    }).execute()
+
+    log_activity(user, "create", "ocr_upload")
+
+    return {
+        "message": "OCR processado com sucesso",
+        "extracted_text": extracted_text
+    }
+
 
 # ----------------------------------------------------
 # ALUNOS
