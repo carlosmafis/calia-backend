@@ -13,7 +13,7 @@ load_dotenv()
 app = FastAPI()
 
 # ----------------------------------------------------
-# CORS (LIBERA FRONTEND DA VERCEL)
+# CORS
 # ----------------------------------------------------
 
 app.add_middleware(
@@ -25,14 +25,13 @@ app.add_middleware(
 )
 
 # ----------------------------------------------------
-# CONFIG SUPABASE
+# SUPABASE
 # ----------------------------------------------------
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
 security = HTTPBearer()
 
 # ----------------------------------------------------
@@ -44,12 +43,14 @@ class SchoolCreate(BaseModel):
     slug: str
     plan: Optional[str] = "free"
 
-
 class StudentCreate(BaseModel):
     name: str
     class_id: Optional[str] = None
     birth_date: Optional[str] = None
 
+class TeacherCreate(BaseModel):
+    email: str
+    full_name: str
 
 # ----------------------------------------------------
 # AUTENTICAÇÃO
@@ -61,7 +62,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     try:
         user_response = supabase.auth.get_user(token)
         user_data = user_response.user
-    except Exception:
+    except:
         raise HTTPException(status_code=401, detail="Token inválido")
 
     if not user_data:
@@ -77,7 +78,6 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
     return user_profile.data[0]
 
-
 # ----------------------------------------------------
 # LOG
 # ----------------------------------------------------
@@ -91,7 +91,6 @@ def log_activity(user, action, entity):
         "created_at": datetime.utcnow().isoformat()
     }).execute()
 
-
 # ----------------------------------------------------
 # ROTAS BÁSICAS
 # ----------------------------------------------------
@@ -100,14 +99,12 @@ def log_activity(user, action, entity):
 def root():
     return {"status": "CALIA 2.0 Backend Online 🚀"}
 
-
 @app.get("/me")
 def get_me(user=Depends(get_current_user)):
     return user
 
-
 # ----------------------------------------------------
-# ESCOLAS (SUPER ADMIN)
+# ESCOLAS
 # ----------------------------------------------------
 
 @app.post("/schools")
@@ -115,19 +112,14 @@ def create_school(data: SchoolCreate, user=Depends(get_current_user)):
     if user["role"] != "super_admin":
         raise HTTPException(status_code=403, detail="Acesso negado")
 
-    # 1️⃣ Criar escola
     school_response = supabase.table("schools").insert({
         "name": data.name,
         "slug": data.slug,
         "plan": data.plan
     }).execute()
 
-    if not school_response.data:
-        raise HTTPException(status_code=400, detail="Erro ao criar escola")
-
     school = school_response.data[0]
 
-    # 2️⃣ Criar usuário admin automaticamente
     admin_email = f"admin@{data.slug}.com"
     admin_password = "12345678"
 
@@ -137,10 +129,6 @@ def create_school(data: SchoolCreate, user=Depends(get_current_user)):
         "email_confirm": True
     })
 
-    if not auth_response.user:
-        raise HTTPException(status_code=400, detail="Erro ao criar usuário admin")
-
-    # 3️⃣ Criar profile do admin
     supabase.table("profiles").insert({
         "id": auth_response.user.id,
         "school_id": school["id"],
@@ -156,20 +144,60 @@ def create_school(data: SchoolCreate, user=Depends(get_current_user)):
         "admin_password": admin_password
     }
 
-
 @app.get("/schools")
 def get_schools(user=Depends(get_current_user)):
     if user["role"] == "super_admin":
-        schools = supabase.table("schools").select("*").execute()
-        return schools.data
+        return supabase.table("schools").select("*").execute().data
 
-    school = supabase.table("schools") \
+    return supabase.table("schools") \
         .select("*") \
         .eq("id", user["school_id"]) \
-        .execute()
+        .execute().data
 
-    return school.data
+# ----------------------------------------------------
+# PROFESSORES (ADMIN)
+# ----------------------------------------------------
 
+@app.post("/teachers")
+def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Apenas admin pode criar professor")
+
+    temp_password = "12345678"
+
+    auth_response = supabase.auth.admin.create_user({
+        "email": data.email,
+        "password": temp_password,
+        "email_confirm": True
+    })
+
+    if not auth_response.user:
+        raise HTTPException(status_code=400, detail="Erro ao criar professor")
+
+    supabase.table("profiles").insert({
+        "id": auth_response.user.id,
+        "school_id": user["school_id"],
+        "role": "professor",
+        "full_name": data.full_name
+    }).execute()
+
+    log_activity(user, "create", "teacher")
+
+    return {
+        "email": data.email,
+        "temporary_password": temp_password
+    }
+
+@app.get("/teachers")
+def list_teachers(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Apenas admin pode listar professores")
+
+    return supabase.table("profiles") \
+        .select("*") \
+        .eq("school_id", user["school_id"]) \
+        .eq("role", "professor") \
+        .execute().data
 
 # ----------------------------------------------------
 # ALUNOS
@@ -191,12 +219,9 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
 
     return student.data
 
-
 @app.get("/students")
 def list_students(user=Depends(get_current_user)):
-    students = supabase.table("students") \
+    return supabase.table("students") \
         .select("*") \
         .eq("school_id", user["school_id"]) \
-        .execute()
-
-    return students.data
+        .execute().data
