@@ -1,6 +1,7 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException, Header
-from jose import jwt
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -11,23 +12,28 @@ load_dotenv()
 
 app = FastAPI()
 
-from fastapi.middleware.cors import CORSMiddleware
+# ----------------------------------------------------
+# CORS (LIBERA FRONTEND DA VERCEL)
+# ----------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://calia-frontend.vercel.app"
-    ],
+    allow_origins=["https://calia-frontend.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
+# ----------------------------------------------------
+# CONFIG SUPABASE
+# ----------------------------------------------------
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+security = HTTPBearer()
 
 # ----------------------------------------------------
 # MODELOS
@@ -49,18 +55,14 @@ class StudentCreate(BaseModel):
 # AUTENTICAÇÃO
 # ----------------------------------------------------
 
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-security = HTTPBearer()
-
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
 
     try:
         user_response = supabase.auth.get_user(token)
         user_data = user_response.user
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Erro ao validar token: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido")
 
     if not user_data:
         raise HTTPException(status_code=401, detail="Token inválido")
@@ -77,7 +79,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 
 # ----------------------------------------------------
-# LOG AUTOMÁTICO
+# LOG
 # ----------------------------------------------------
 
 def log_activity(user, action, entity):
@@ -105,7 +107,7 @@ def get_me(user=Depends(get_current_user)):
 
 
 # ----------------------------------------------------
-# ESCOLAS
+# ESCOLAS (SUPER ADMIN)
 # ----------------------------------------------------
 
 @app.post("/schools")
@@ -155,6 +157,20 @@ def create_school(data: SchoolCreate, user=Depends(get_current_user)):
     }
 
 
+@app.get("/schools")
+def get_schools(user=Depends(get_current_user)):
+    if user["role"] == "super_admin":
+        schools = supabase.table("schools").select("*").execute()
+        return schools.data
+
+    school = supabase.table("schools") \
+        .select("*") \
+        .eq("id", user["school_id"]) \
+        .execute()
+
+    return school.data
+
+
 # ----------------------------------------------------
 # ALUNOS
 # ----------------------------------------------------
@@ -184,15 +200,3 @@ def list_students(user=Depends(get_current_user)):
         .execute()
 
     return students.data
-
-@app.post("/debug-login")
-def debug_login(email: str, password: str):
-    response = supabase.auth.sign_in_with_password({
-        "email": email,
-        "password": password
-    })
-    return response
-
-@app.get("/debug-token")
-def debug_token(authorization: str = Header(None)):
-    return {"header_recebido": authorization}
