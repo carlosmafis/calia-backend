@@ -5,3 +5,4 @@ supabase
 httpx
 python-jose
 pydantic
+python-multipart
