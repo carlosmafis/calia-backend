@@ -234,7 +234,19 @@ async def ocr_upload(file: UploadFile = File(...), user=Depends(get_current_user
         "extracted_text": extracted_text
     }
 
+@app.get("/ocr-history")
+def ocr_history(user=Depends(get_current_user)):
 
+    if user["role"] != "professor":
+        raise HTTPException(status_code=403, detail="Apenas professor pode acessar histórico")
+
+    history = supabase.table("ocr_uploads") \
+        .select("*") \
+        .eq("uploaded_by", user["id"]) \
+        .order("created_at", desc=True) \
+        .execute()
+
+    return history.data
 # ----------------------------------------------------
 # ALUNOS
 # ----------------------------------------------------
