@@ -55,6 +55,20 @@ class TeacherCreate(BaseModel):
     email: str
     full_name: str
 
+class ClassCreate(BaseModel):
+    name: str
+    year: str
+
+class AssessmentCreate(BaseModel):
+    class_id: str
+    title: str
+    total_questions: int
+
+class QuestionCreate(BaseModel):
+    assessment_id: str
+    question_number: int
+    correct_answer: str
+    weight: float
 # ----------------------------------------------------
 # AUTENTICAÇÃO
 # ----------------------------------------------------
@@ -94,6 +108,55 @@ def log_activity(user, action, entity):
         "created_at": datetime.utcnow().isoformat()
     }).execute()
 
+# ----------------------------------------------------
+# NOVAS
+# ----------------------------------------------------
+def calculate_score(student_answers, correct_answers):
+
+    score = 0
+
+    for q in correct_answers:
+
+        number = q["question_number"]
+        correct = q["correct_answer"]
+        weight = q["weight"]
+
+        if student_answers.get(str(number)) == correct:
+            score += weight
+
+    return score
+
+@app.post("/submit-answers")
+def submit_answers(assessment_id:str, student_id:str, answers:dict, user=Depends(get_current_user)):
+
+    correct = supabase.table("assessment_questions") \
+        .select("*") \
+        .eq("assessment_id", assessment_id) \
+        .execute().data
+
+    score = calculate_score(answers, correct)
+
+    supabase.table("student_submissions").insert({
+        "school_id": user["school_id"],
+        "assessment_id": assessment_id,
+        "student_id": student_id,
+        "uploaded_by": user["id"],
+        "extracted_answers": answers,
+        "score": score
+    }).execute()
+
+    return {"score":score}
+
+@app.get("/student-progress/{student_id}")
+def student_progress(student_id:str,user=Depends(get_current_user)):
+
+    data = supabase.table("student_submissions") \
+        .select("score,created_at") \
+        .eq("student_id", student_id) \
+        .order("created_at") \
+        .execute()
+
+    return data.data
 # ----------------------------------------------------
 # ROTAS BÁSICAS
 # ----------------------------------------------------
@@ -156,6 +219,44 @@ def get_schools(user=Depends(get_current_user)):
         .select("*") \
         .eq("id", user["school_id"]) \
         .execute().data
+
+@app.post("/classes")
+def create_class(data: ClassCreate, user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    new_class = supabase.table("classes").insert({
+        "school_id": user["school_id"],
+        "name": data.name,
+        "year": data.year
+    }).execute()
+
+    return new_class.data
+
+@app.get("/classes")
+def list_classes(user=Depends(get_current_user)):
+
+    classes = supabase.table("classes") \
+        .select("*") \
+        .eq("school_id", user["school_id"]) \
+        .execute()
+
+    return classes.data
+
+@app.post("/assign-teacher")
+def assign_teacher(teacher_id:str, class_id:str, user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("teacher_classes").insert({
+        "teacher_id": teacher_id,
+        "class_id": class_id
+    }).execute()
+
+    return {"message":"Professor vinculado"}
+
 
 # ----------------------------------------------------
 # PROFESSORES (ADMIN)
@@ -261,6 +362,39 @@ def ocr_history(user=Depends(get_current_user)):
         .execute()
 
     return history.data
+
+@app.post("/assessments")
+def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
+
+    if user["role"] != "professor":
+        raise HTTPException(status_code=403)
+
+    new_assessment = supabase.table("assessments").insert({
+        "school_id": user["school_id"],
+        "class_id": data.class_id,
+        "created_by": user["id"],
+        "title": data.title,
+        "total_questions": data.total_questions
+    }).execute()
+
+    return new_assessment.data
+@app.post("/assessment-question")
+def create_question(data: QuestionCreate, user=Depends(get_current_user)):
+
+    if user["role"] != "professor":
+        raise HTTPException(status_code=403)
+
+    supabase.table("assessment_questions").insert({
+        "assessment_id": data.assessment_id,
+        "question_number": data.question_number,
+        "correct_answer": data.correct_answer,
+        "weight": data.weight
+    }).execute()
+
+    return {"message":"Questão cadastrada"}
+
+
+
 # ----------------------------------------------------
 # ALUNOS
 # ----------------------------------------------------
