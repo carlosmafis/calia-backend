@@ -202,25 +202,39 @@ def list_teachers(user=Depends(get_current_user)):
         .eq("role", "professor") \
         .execute().data
 @app.post("/ocr-upload")
-async def ocr_upload(file: UploadFile = File(...), user=Depends(get_current_user)):
+async def ocr_upload(
+    student_id: str,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user)
+):
 
     if user["role"] != "professor":
         raise HTTPException(status_code=403, detail="Apenas professor pode usar OCR")
 
-    # 1️⃣ Salvar arquivo temporariamente
+    # Verificar se aluno pertence à mesma escola
+    student_check = supabase.table("students") \
+        .select("*") \
+        .eq("id", student_id) \
+        .eq("school_id", user["school_id"]) \
+        .execute()
+
+    if not student_check.data:
+        raise HTTPException(status_code=404, detail="Aluno não encontrado")
+
+    # Salvar arquivo temporariamente
     file_id = str(uuid.uuid4())
     file_path = f"/tmp/{file_id}_{file.filename}"
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 2️⃣ Aqui você coloca seu módulo OCR antigo
-    # Por enquanto vamos simular OCR
+    # Simulação OCR (substituir depois pelo módulo real)
     extracted_text = f"Texto extraído simulado do arquivo {file.filename}"
 
-    # 3️⃣ Salvar no banco
+    # Salvar no banco com student_id
     supabase.table("ocr_uploads").insert({
         "school_id": user["school_id"],
+        "student_id": student_id,
         "uploaded_by": user["id"],
         "file_url": file.filename,
         "extracted_text": extracted_text,
