@@ -48,8 +48,8 @@ class SchoolCreate(BaseModel):
 
 class StudentCreate(BaseModel):
     name: str
-    class_id: Optional[str] = None
-    birth_date: Optional[str] = None
+    class_id: str
+    status: str = "CURSANDO"
 
 class TeacherCreate(BaseModel):
     email: str
@@ -157,6 +157,54 @@ def student_progress(student_id:str,user=Depends(get_current_user)):
         .execute()
 
     return data.data
+
+import pandas as pd
+
+@app.post("/students-upload")
+async def upload_students(class_id:str,file:UploadFile = File(...),user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    df = pd.read_csv(file.file)
+
+    for _,row in df.iterrows():
+
+        supabase.table("students").insert({
+
+            "school_id":user["school_id"],
+            "class_id":class_id,
+            "name":row["name"],
+            "status":row.get("status","CURSANDO")
+
+        }).execute()
+
+    return {"message":"Alunos importados"}
+
+@app.put("/students/{student_id}")
+def update_student(student_id:str,name:str,status:str,user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("students").update({
+
+        "name":name,
+        "status":status
+
+    }).eq("id",student_id).execute()
+
+    return {"message":"Atualizado"}
+
+@app.delete("/students/{student_id}")
+def delete_student(student_id:str,user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("students").delete().eq("id",student_id).execute()
+
+    return {"message":"Aluno removido"}
 # ----------------------------------------------------
 # ROTAS BÁSICAS
 # ----------------------------------------------------
@@ -302,6 +350,7 @@ def list_teachers(user=Depends(get_current_user)):
         .eq("school_id", user["school_id"]) \
         .eq("role", "professor") \
         .execute().data
+
 @app.post("/ocr-upload")
 async def ocr_upload(
     student_id: str,
@@ -401,17 +450,18 @@ def create_question(data: QuestionCreate, user=Depends(get_current_user)):
 
 @app.post("/students")
 def create_student(data: StudentCreate, user=Depends(get_current_user)):
-    if user["role"] not in ["admin", "professor"]:
-        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
 
     student = supabase.table("students").insert({
+
         "school_id": user["school_id"],
         "class_id": data.class_id,
         "name": data.name,
-        "birth_date": data.birth_date
-    }).execute()
+        "status": data.status
 
-    log_activity(user, "create", "student")
+    }).execute()
 
     return student.data
 
