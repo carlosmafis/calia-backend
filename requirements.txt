@@ -1,8 +1,9 @@
 fastapi
 uvicorn
-python-dotenv
 supabase
-httpx
+python-dotenv
 python-jose
 pydantic
 python-multipart
+pandas
+openpyxl
