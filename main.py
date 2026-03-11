@@ -1,14 +1,17 @@
-from fastapi import UploadFile, File
-import shutil
-import uuid
 import os
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import uuid
+import shutil
+import pandas as pd
+
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
 from supabase import create_client
 from dotenv import load_dotenv
+
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
 
 load_dotenv()
@@ -46,29 +49,51 @@ class SchoolCreate(BaseModel):
     slug: str
     plan: Optional[str] = "free"
 
+
 class StudentCreate(BaseModel):
     name: str
     class_id: str
     status: str = "CURSANDO"
 
+
+class StudentUpdate(BaseModel):
+    name: str
+    status: str
+
+
 class TeacherCreate(BaseModel):
     email: str
     full_name: str
 
+
 class ClassCreate(BaseModel):
     name: str
     year: str
+
+
+class AssignTeacher(BaseModel):
+    teacher_id: str
+    class_id: str
+
 
 class AssessmentCreate(BaseModel):
     class_id: str
     title: str
     total_questions: int
 
+
 class QuestionCreate(BaseModel):
     assessment_id: str
     question_number: int
     correct_answer: str
     weight: float
+
+
+class SubmitAnswers(BaseModel):
+    assessment_id: str
+    student_id: str
+    answers: Dict[str, str]
+
 # ----------------------------------------------------
 # AUTENTICAÇÃO
 # ----------------------------------------------------
@@ -85,133 +110,50 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     if not user_data:
         raise HTTPException(status_code=401, detail="Token inválido")
 
-    user_profile = supabase.table("profiles") \
-        .select("*") \
-        .eq("id", user_data.id) \
-        .execute()
+    profile = supabase.table("profiles").select("*").eq("id", user_data.id).execute()
 
-    if not user_profile.data:
+    if not profile.data:
         raise HTTPException(status_code=403, detail="Perfil não encontrado")
 
-    return user_profile.data[0]
+    return profile.data[0]
 
 # ----------------------------------------------------
-# LOG
+# UTILIDADES
 # ----------------------------------------------------
 
 def log_activity(user, action, entity):
+
     supabase.table("activity_logs").insert({
-        "school_id": user.get("school_id"),
-        "user_id": user.get("id"),
+        "school_id": user["school_id"],
+        "user_id": user["id"],
         "action": action,
         "entity": entity,
         "created_at": datetime.utcnow().isoformat()
     }).execute()
 
-# ----------------------------------------------------
-# NOVAS
-# ----------------------------------------------------
+
 def calculate_score(student_answers, correct_answers):
 
     score = 0
 
     for q in correct_answers:
 
-        number = q["question_number"]
+        number = str(q["question_number"])
         correct = q["correct_answer"]
         weight = q["weight"]
 
-        if student_answers.get(str(number)) == correct:
+        if student_answers.get(number) == correct:
             score += weight
 
     return score
 
-@app.post("/submit-answers")
-def submit_answers(assessment_id:str, student_id:str, answers:dict, user=Depends(get_current_user)):
-
-    correct = supabase.table("assessment_questions") \
-        .select("*") \
-        .eq("assessment_id", assessment_id) \
-        .execute().data
-
-    score = calculate_score(answers, correct)
-
-    supabase.table("student_submissions").insert({
-        "school_id": user["school_id"],
-        "assessment_id": assessment_id,
-        "student_id": student_id,
-        "uploaded_by": user["id"],
-        "extracted_answers": answers,
-        "score": score
-    }).execute()
-
-    return {"score":score}
-
-@app.get("/student-progress/{student_id}")
-def student_progress(student_id:str,user=Depends(get_current_user)):
-
-    data = supabase.table("student_submissions") \
-        .select("score,created_at") \
-        .eq("student_id", student_id) \
-        .order("created_at") \
-        .execute()
-
-    return data.data
-
-import pandas as pd
-
-@app.post("/students-upload")
-async def upload_students(class_id:str,file:UploadFile = File(...),user=Depends(get_current_user)):
-
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-
-    df = pd.read_csv(file.file)
-
-    for _,row in df.iterrows():
-
-        supabase.table("students").insert({
-
-            "school_id":user["school_id"],
-            "class_id":class_id,
-            "name":row["name"],
-            "status":row.get("status","CURSANDO")
-
-        }).execute()
-
-    return {"message":"Alunos importados"}
-
-@app.put("/students/{student_id}")
-def update_student(student_id:str,name:str,status:str,user=Depends(get_current_user)):
-
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-
-    supabase.table("students").update({
-
-        "name":name,
-        "status":status
-
-    }).eq("id",student_id).execute()
-
-    return {"message":"Atualizado"}
-
-@app.delete("/students/{student_id}")
-def delete_student(student_id:str,user=Depends(get_current_user)):
-
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-
-    supabase.table("students").delete().eq("id",student_id).execute()
-
-    return {"message":"Aluno removido"}
 # ----------------------------------------------------
-# ROTAS BÁSICAS
+# ROOT
 # ----------------------------------------------------
 
 @app.get("/")
 def root():
-    return {"status": "CALIA 2.0 Backend Online 🚀"}
+    return {"status": "CALIA Backend Online"}
 
 @app.get("/me")
 def get_me(user=Depends(get_current_user)):
@@ -223,34 +165,31 @@ def get_me(user=Depends(get_current_user)):
 
 @app.post("/schools")
 def create_school(data: SchoolCreate, user=Depends(get_current_user)):
-    if user["role"] != "super_admin":
-        raise HTTPException(status_code=403, detail="Acesso negado")
 
-    school_response = supabase.table("schools").insert({
+    if user["role"] != "super_admin":
+        raise HTTPException(status_code=403)
+
+    school = supabase.table("schools").insert({
         "name": data.name,
         "slug": data.slug,
         "plan": data.plan
-    }).execute()
-
-    school = school_response.data[0]
+    }).execute().data[0]
 
     admin_email = f"admin@{data.slug}.com"
     admin_password = "12345678"
 
-    auth_response = supabase.auth.admin.create_user({
+    auth_user = supabase.auth.admin.create_user({
         "email": admin_email,
         "password": admin_password,
         "email_confirm": True
     })
 
     supabase.table("profiles").insert({
-        "id": auth_response.user.id,
+        "id": auth_user.user.id,
         "school_id": school["id"],
         "role": "admin",
         "full_name": "Administrador"
     }).execute()
-
-    log_activity(user, "create", "school_with_admin")
 
     return {
         "school": school,
@@ -258,15 +197,9 @@ def create_school(data: SchoolCreate, user=Depends(get_current_user)):
         "admin_password": admin_password
     }
 
-@app.get("/schools")
-def get_schools(user=Depends(get_current_user)):
-    if user["role"] == "super_admin":
-        return supabase.table("schools").select("*").execute().data
-
-    return supabase.table("schools") \
-        .select("*") \
-        .eq("id", user["school_id"]) \
-        .execute().data
+# ----------------------------------------------------
+# TURMAS
+# ----------------------------------------------------
 
 @app.post("/classes")
 def create_class(data: ClassCreate, user=Depends(get_current_user)):
@@ -282,6 +215,7 @@ def create_class(data: ClassCreate, user=Depends(get_current_user)):
 
     return new_class.data
 
+
 @app.get("/classes")
 def list_classes(user=Depends(get_current_user)):
 
@@ -292,58 +226,65 @@ def list_classes(user=Depends(get_current_user)):
 
     return classes.data
 
+# ----------------------------------------------------
+# PROFESSOR x TURMA
+# ----------------------------------------------------
+
 @app.post("/assign-teacher")
-def assign_teacher(teacher_id:str, class_id:str, user=Depends(get_current_user)):
+def assign_teacher(data: AssignTeacher, user=Depends(get_current_user)):
 
     if user["role"] != "admin":
         raise HTTPException(status_code=403)
 
+    existing = supabase.table("teacher_classes") \
+        .select("*") \
+        .eq("teacher_id", data.teacher_id) \
+        .eq("class_id", data.class_id) \
+        .execute()
+
+    if existing.data:
+        return {"message": "Professor já vinculado"}
+
     supabase.table("teacher_classes").insert({
-        "teacher_id": teacher_id,
-        "class_id": class_id
+        "teacher_id": data.teacher_id,
+        "class_id": data.class_id
     }).execute()
 
-    return {"message":"Professor vinculado"}
-
+    return {"message": "Professor vinculado"}
 
 # ----------------------------------------------------
-# PROFESSORES (ADMIN)
+# PROFESSORES
 # ----------------------------------------------------
 
 @app.post("/teachers")
 def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
+
     if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Apenas admin pode criar professor")
+        raise HTTPException(status_code=403)
 
-    temp_password = "12345678"
+    password = "12345678"
 
-    auth_response = supabase.auth.admin.create_user({
+    auth = supabase.auth.admin.create_user({
         "email": data.email,
-        "password": temp_password,
+        "password": password,
         "email_confirm": True
     })
 
-    if not auth_response.user:
-        raise HTTPException(status_code=400, detail="Erro ao criar professor")
-
     supabase.table("profiles").insert({
-        "id": auth_response.user.id,
+        "id": auth.user.id,
         "school_id": user["school_id"],
         "role": "professor",
         "full_name": data.full_name
     }).execute()
 
-    log_activity(user, "create", "teacher")
+    return {"email": data.email, "temporary_password": password}
 
-    return {
-        "email": data.email,
-        "temporary_password": temp_password
-    }
 
 @app.get("/teachers")
 def list_teachers(user=Depends(get_current_user)):
+
     if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Apenas admin pode listar professores")
+        raise HTTPException(status_code=403)
 
     return supabase.table("profiles") \
         .select("*") \
@@ -351,66 +292,88 @@ def list_teachers(user=Depends(get_current_user)):
         .eq("role", "professor") \
         .execute().data
 
-@app.post("/ocr-upload")
-async def ocr_upload(
-    student_id: str,
-    file: UploadFile = File(...),
-    user=Depends(get_current_user)
-):
+# ----------------------------------------------------
+# ALUNOS
+# ----------------------------------------------------
 
-    if user["role"] != "professor":
-        raise HTTPException(status_code=403, detail="Apenas professor pode usar OCR")
+@app.post("/students")
+def create_student(data: StudentCreate, user=Depends(get_current_user)):
 
-    # Verificar se aluno pertence à mesma escola
-    student_check = supabase.table("students") \
-        .select("*") \
-        .eq("id", student_id) \
-        .eq("school_id", user["school_id"]) \
-        .execute()
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
 
-    if not student_check.data:
-        raise HTTPException(status_code=404, detail="Aluno não encontrado")
-
-    # Salvar arquivo temporariamente
-    file_id = str(uuid.uuid4())
-    file_path = f"/tmp/{file_id}_{file.filename}"
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # Simulação OCR (substituir depois pelo módulo real)
-    extracted_text = f"Texto extraído simulado do arquivo {file.filename}"
-
-    # Salvar no banco com student_id
-    supabase.table("ocr_uploads").insert({
+    student = supabase.table("students").insert({
         "school_id": user["school_id"],
-        "student_id": student_id,
-        "uploaded_by": user["id"],
-        "file_url": file.filename,
-        "extracted_text": extracted_text,
-        "status": "completed"
+        "class_id": data.class_id,
+        "name": data.name,
+        "status": data.status
     }).execute()
 
-    log_activity(user, "create", "ocr_upload")
+    return student.data
 
-    return {
-        "message": "OCR processado com sucesso",
-        "extracted_text": extracted_text
-    }
 
-@app.get("/ocr-history")
-def ocr_history(user=Depends(get_current_user)):
+@app.get("/students")
+def list_students(user=Depends(get_current_user)):
 
-    if user["role"] != "professor":
-        raise HTTPException(status_code=403, detail="Apenas professor pode acessar histórico")
-
-    history = supabase.table("ocr_uploads") \
+    return supabase.table("students") \
         .select("*") \
-        .eq("uploaded_by", user["id"]) \
-        .order("created_at", desc=True) \
-        .execute()
+        .eq("school_id", user["school_id"]) \
+        .execute().data
 
-    return history.data
+
+@app.put("/students/{student_id}")
+def update_student(student_id: str, data: StudentUpdate, user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("students").update({
+        "name": data.name,
+        "status": data.status
+    }).eq("id", student_id).execute()
+
+    return {"message": "Atualizado"}
+
+
+@app.delete("/students/{student_id}")
+def delete_student(student_id: str, user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("students").delete().eq("id", student_id).execute()
+
+    return {"message": "Aluno removido"}
+
+# ----------------------------------------------------
+# IMPORTAÇÃO DE ALUNOS
+# ----------------------------------------------------
+
+@app.post("/students-upload")
+async def upload_students(class_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    if file.filename.endswith(".xlsx"):
+        df = pd.read_excel(file.file)
+    else:
+        df = pd.read_csv(file.file)
+
+    for _, row in df.iterrows():
+
+        supabase.table("students").insert({
+            "school_id": user["school_id"],
+            "class_id": class_id,
+            "name": row["name"],
+            "status": row.get("status", "CURSANDO")
+        }).execute()
+
+    return {"message": "Alunos importados"}
+
+# ----------------------------------------------------
+# AVALIAÇÕES
+# ----------------------------------------------------
 
 @app.post("/assessments")
 def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
@@ -427,6 +390,8 @@ def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
     }).execute()
 
     return new_assessment.data
+
+
 @app.post("/assessment-question")
 def create_question(data: QuestionCreate, user=Depends(get_current_user)):
 
@@ -440,34 +405,75 @@ def create_question(data: QuestionCreate, user=Depends(get_current_user)):
         "weight": data.weight
     }).execute()
 
-    return {"message":"Questão cadastrada"}
-
-
+    return {"message": "Questão cadastrada"}
 
 # ----------------------------------------------------
-# ALUNOS
+# OCR
 # ----------------------------------------------------
 
-@app.post("/students")
-def create_student(data: StudentCreate, user=Depends(get_current_user)):
+@app.post("/ocr-upload")
+async def ocr_upload(student_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
 
-    if user["role"] != "admin":
+    if user["role"] != "professor":
         raise HTTPException(status_code=403)
 
-    student = supabase.table("students").insert({
+    file_id = str(uuid.uuid4())
+    file_path = f"/tmp/{file_id}_{file.filename}"
 
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    extracted_text = f"OCR simulado {file.filename}"
+
+    supabase.table("ocr_uploads").insert({
         "school_id": user["school_id"],
-        "class_id": data.class_id,
-        "name": data.name,
-        "status": data.status
-
+        "student_id": student_id,
+        "uploaded_by": user["id"],
+        "file_url": file.filename,
+        "extracted_text": extracted_text,
+        "status": "completed"
     }).execute()
 
-    return student.data
+    os.remove(file_path)
 
-@app.get("/students")
-def list_students(user=Depends(get_current_user)):
-    return supabase.table("students") \
+    return {"message": "OCR processado"}
+
+# ----------------------------------------------------
+# CORREÇÃO
+# ----------------------------------------------------
+
+@app.post("/submit-answers")
+def submit_answers(data: SubmitAnswers, user=Depends(get_current_user)):
+
+    correct = supabase.table("assessment_questions") \
         .select("*") \
-        .eq("school_id", user["school_id"]) \
+        .eq("assessment_id", data.assessment_id) \
         .execute().data
+
+    score = calculate_score(data.answers, correct)
+
+    supabase.table("student_submissions").insert({
+        "school_id": user["school_id"],
+        "assessment_id": data.assessment_id,
+        "student_id": data.student_id,
+        "uploaded_by": user["id"],
+        "extracted_answers": data.answers,
+        "score": score
+    }).execute()
+
+    return {"score": score}
+
+# ----------------------------------------------------
+# DASHBOARD
+# ----------------------------------------------------
+
+@app.get("/student-progress/{student_id}")
+def student_progress(student_id: str, user=Depends(get_current_user)):
+
+    data = supabase.table("student_submissions") \
+        .select("score,created_at") \
+        .eq("student_id", student_id) \
+        .order("created_at") \
+        .execute()
+
+    return data.data
