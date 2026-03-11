@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from core.auth import get_current_user
-from core.config import supabase
 from pydantic import BaseModel
+from core.config import supabase
+from core.auth import get_current_user
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
@@ -9,7 +9,6 @@ class StudentCreate(BaseModel):
     name: str
     class_id: str
     status: str = "CURSANDO"
-
 
 @router.post("/")
 def create_student(data: StudentCreate, user=Depends(get_current_user)):
@@ -25,7 +24,6 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
     }).execute()
 
     return student.data
-
 
 @router.get("/")
 def list_students(user=Depends(get_current_user)):
