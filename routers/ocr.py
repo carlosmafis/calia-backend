@@ -1,16 +1,19 @@
 import uuid
-import shutil
 import os
+import cv2
+import numpy as np
+from PIL import Image
 
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+
 from core.auth import get_current_user
 from core.config import supabase
 
 from services.ocr_service import read_answer_sheet
 from services.grading_service import calculate_score
 
-router = APIRouter(prefix="/ocr", tags=["OCR"])
 
+router = APIRouter(prefix="/ocr", tags=["OCR"])
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
@@ -26,28 +29,38 @@ async def correct_exam(
     if user["role"] != "professor":
         raise HTTPException(status_code=403)
 
-    # ------------------------------------------------
-    # Validar tamanho do arquivo
-    # ------------------------------------------------
-
     contents = await file.read()
 
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=400,
-            detail="Imagem muito grande (máx 5MB)"
+            detail="Imagem muito grande"
         )
 
     file_id = str(uuid.uuid4())
     file_path = f"/tmp/{file_id}.jpg"
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(contents)
+    # salvar imagem
+    with open(file_path, "wb") as f:
+        f.write(contents)
 
-    # ------------------------------------------------
-    # Buscar gabarito da avaliação
-    # ------------------------------------------------
+    # otimização: reduzir resolução
+    img = cv2.imread(file_path)
 
+    h, w = img.shape[:2]
+
+    altura_max = 1000
+
+    if h > altura_max:
+
+        proporcao = altura_max / h
+        novo_w = int(w * proporcao)
+
+        img = cv2.resize(img, (novo_w, altura_max))
+
+        cv2.imwrite(file_path, img)
+
+    # buscar gabarito
     assessment = supabase.table("assessments") \
         .select("*") \
         .eq("id", assessment_id) \
@@ -60,33 +73,13 @@ async def correct_exam(
 
     gabarito = [g.strip().upper() for g in gabarito]
 
-    # ------------------------------------------------
-    # EXECUTAR OCR (seu código)
-    # ------------------------------------------------
+    # executar OCR
+    respostas = read_answer_sheet(file_path, gabarito)
 
-    try:
-
-        respostas = read_answer_sheet(file_path, gabarito)
-
-    except Exception as e:
-
-        os.remove(file_path)
-
-        raise HTTPException(
-            status_code=400,
-            detail=f"Erro OCR: {str(e)}"
-        )
-
-    # ------------------------------------------------
-    # CALCULAR NOTA
-    # ------------------------------------------------
-
+    # calcular nota
     score = calculate_score(respostas, gabarito)
 
-    # ------------------------------------------------
-    # SALVAR RESULTADO
-    # ------------------------------------------------
-
+    # salvar resultado
     supabase.table("student_submissions").insert({
 
         "school_id": user["school_id"],
