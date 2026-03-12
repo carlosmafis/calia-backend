@@ -7,6 +7,11 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from core.auth import get_current_user
 from core.config import supabase
 
+from services.ocr_service import read_answer_sheet
+
+answers = read_answer_sheet(file_path, gabarito)
+score = calculate_score(answers, gabarito)
+
 router = APIRouter(prefix="/ocr", tags=["OCR"])
 
 
