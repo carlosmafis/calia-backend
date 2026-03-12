@@ -23,6 +23,19 @@ def create_class(data: ClassCreate, user=Depends(get_current_user)):
 
     return new_class.data
 
+@router.post("/assign-teacher")
+def assign_teacher(teacher_id: str, class_id: str, user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("teacher_classes").insert({
+        "teacher_id": teacher_id,
+        "class_id": class_id
+    }).execute()
+
+    return {"message": "Professor vinculado à turma"}
+
 @router.get("/")
 def list_classes(user=Depends(get_current_user)):
 
