@@ -3,7 +3,10 @@ uvicorn
 supabase
 python-dotenv
 python-jose
-pydantic
 python-multipart
+pydantic
 pandas
 openpyxl
+opencv-python-headless
+numpy
+Pillow
