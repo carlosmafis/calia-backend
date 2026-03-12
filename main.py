@@ -31,3 +31,7 @@ app.include_router(dashboard.router)
 @app.get("/")
 def root():
     return {"status": "CALIA Backend Online"}
+
+@app.get("/me")
+def get_me(user=Depends(get_current_user)):
+    return user
