@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import schools
@@ -8,6 +8,8 @@ from routers import classes
 from routers import assessments
 from routers import ocr
 from routers import dashboard
+
+from core.auth import get_current_user
 
 app = FastAPI()
 
