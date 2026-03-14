@@ -78,16 +78,25 @@ async def correct_exam(
 # MANUAL CORRECTION
 # ===============================
 
+from pydantic import BaseModel
+
+
+class ManualSubmission(BaseModel):
+    assessment_id: str
+    student_id: str
+    answers: dict
+
+
 @router.post("/submit-answers")
 
 def submit_answers(
-    data: dict = Body(...),
+    data: ManualSubmission,
     user=Depends(get_current_user)
 ):
 
-    assessment_id = data["assessment_id"]
-    student_id = data["student_id"]
-    answers = data["answers"]
+    assessment_id = data.assessment_id
+    student_id = data.student_id
+    answers = data.answers
 
     score = calculate_score(
         assessment_id,
@@ -96,15 +105,15 @@ def submit_answers(
 
     supabase.table("student_submissions").insert({
 
-        "school_id":user["school_id"],
-        "assessment_id":assessment_id,
-        "student_id":student_id,
-        "uploaded_by":user["id"],
-        "extracted_answers":answers,
-        "score":score
+        "school_id": user["school_id"],
+        "assessment_id": assessment_id,
+        "student_id": student_id,
+        "uploaded_by": user["id"],
+        "extracted_answers": answers,
+        "score": score
 
     }).execute()
 
     return {
-        "score":score
+        "score": score
     }
