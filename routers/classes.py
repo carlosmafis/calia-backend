@@ -3,11 +3,13 @@ from pydantic import BaseModel
 from core.config import supabase
 from core.auth import get_current_user
 
-router = APIRouter(prefix="/classes", tags=["Classes"])
+router = APIRouter(tags=["Classes"])
+
 
 class ClassCreate(BaseModel):
     name: str
     year: str
+
 
 @router.post("/")
 def create_class(data: ClassCreate, user=Depends(get_current_user)):
@@ -23,6 +25,7 @@ def create_class(data: ClassCreate, user=Depends(get_current_user)):
 
     return new_class.data
 
+
 @router.post("/assign-teacher")
 def assign_teacher(teacher_id: str, class_id: str, user=Depends(get_current_user)):
 
@@ -35,6 +38,7 @@ def assign_teacher(teacher_id: str, class_id: str, user=Depends(get_current_user
     }).execute()
 
     return {"message": "Professor vinculado à turma"}
+
 
 @router.get("/")
 def list_classes(user=Depends(get_current_user)):
