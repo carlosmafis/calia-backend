@@ -28,10 +28,12 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
 @router.get("/")
 def list_students(user=Depends(get_current_user)):
 
-    return supabase.table("students") \
+    students = supabase.table("students") \
         .select("*") \
         .eq("school_id", user["school_id"]) \
-        .execute().data
+        .execute()
+
+    return students.data
 
 @router.put("/move/{student_id}")
 def move_student(student_id: str, class_id: str, user=Depends(get_current_user)):
