@@ -1,15 +1,11 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import schools
-from routers import teachers
-from routers import students
 from routers import classes
+from routers import students
 from routers import assessments
 from routers import ocr
-from routers import dashboard
-
-from core.auth import get_current_user
 
 app = FastAPI()
 
@@ -21,19 +17,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(schools.router)
-app.include_router(teachers.router)
-app.include_router(students.router)
-app.include_router(classes.router)
-app.include_router(assessments.router)
-app.include_router(ocr.router)
-app.include_router(dashboard.router)
-
+app.include_router(schools.router, prefix="/schools")
+app.include_router(classes.router, prefix="/classes")
+app.include_router(students.router, prefix="/students")
+app.include_router(assessments.router, prefix="/assessments")
+app.include_router(ocr.router, prefix="/ocr")
 
 @app.get("/")
 def root():
-    return {"status": "CALIA Backend Online"}
-
-@app.get("/me")
-def get_me(user=Depends(get_current_user)):
-    return user
+    return {"status":"CALIA backend online"}
