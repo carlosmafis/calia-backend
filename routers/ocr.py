@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, Body
+from fastapi import APIRouter, UploadFile, File, Depends
 import uuid
 import shutil
 
@@ -11,92 +11,28 @@ from services.grading_service import calculate_score
 router = APIRouter()
 
 
-# ===============================
-# OCR CORRECTION
-# ===============================
-
 @router.post("/correct")
-
 async def correct_exam(
-    assessment_id:str,
-    student_id:str,
-    file:UploadFile = File(...),
+    assessment_id: str,
+    student_id: str,
+    file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
 
     file_path = f"/tmp/{uuid.uuid4()}.jpg"
 
-    with open(file_path,"wb") as buffer:
-        shutil.copyfileobj(file.file,buffer)
-
-    # buscar gabarito
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
     questions = supabase.table("assessment_questions") \
         .select("*") \
-        .eq("assessment_id",assessment_id) \
+        .eq("assessment_id", assessment_id) \
         .order("question_number") \
         .execute().data
 
-    gabarito = [
-        q["correct_answer"] for q in questions
-    ]
+    gabarito = [q["correct_answer"] for q in questions]
 
-    # rodar OCR
-
-    answers = read_answer_sheet(
-        file_path,
-        gabarito
-    )
-
-    # calcular nota
-
-    score = calculate_score(
-        assessment_id,
-        answers
-    )
-
-    # salvar resultado
-
-    supabase.table("student_submissions").insert({
-
-        "school_id":user["school_id"],
-        "assessment_id":assessment_id,
-        "student_id":student_id,
-        "uploaded_by":user["id"],
-        "extracted_answers":answers,
-        "score":score
-
-    }).execute()
-
-    return {
-        "answers":answers,
-        "score":score
-    }
-
-
-# ===============================
-# MANUAL CORRECTION
-# ===============================
-
-from pydantic import BaseModel
-
-
-class ManualSubmission(BaseModel):
-    assessment_id: str
-    student_id: str
-    answers: dict
-
-
-@router.post("/submit-answers")
-
-def submit_answers(
-    data: ManualSubmission,
-    user=Depends(get_current_user)
-):
-
-    assessment_id = data.assessment_id
-    student_id = data.student_id
-    answers = data.answers
+    answers = read_answer_sheet(file_path, gabarito)
 
     score = calculate_score(
         assessment_id,
@@ -115,5 +51,6 @@ def submit_answers(
     }).execute()
 
     return {
+        "answers": answers,
         "score": score
     }
