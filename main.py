@@ -6,7 +6,12 @@ from routers import classes
 from routers import students
 from routers import assessments
 from routers import ocr
+from core.auth import get_current_user
+from fastapi import Depends
 
+@app.get("/me")
+def get_me(user=Depends(get_current_user)):
+    return user
 app = FastAPI()
 
 app.add_middleware(
