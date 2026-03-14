@@ -33,6 +33,8 @@ async def correct_exam(
     gabarito = [q["correct_answer"] for q in questions]
 
     answers = read_answer_sheet(file_path, gabarito)
+    
+    print("RESPOSTAS OCR:", answers)
 
     score = calculate_score(
         assessment_id,
