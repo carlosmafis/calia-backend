@@ -185,12 +185,12 @@ def read_answer_sheet(image_path, gabarito):
             idx = marcadas[0]
 
             respostas_detectadas.append(
-                {"1":"A","2":"C","3":"D"}[idx]
+                ["A","B","C","D","E"][idx]
             )
 
     answers_dict = {}
 
     for i,resp in enumerate(respostas_detectadas):
-    answers_dict[str(i+1)] = resp
+        answers_dict[str(i+1)] = resp
 
     return answers_dict
