@@ -2,14 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List
 
-from core.auth import get_current_user
-from core.database import supabase
+from main import supabase, get_current_user
 
 router = APIRouter()
 
-# =========================================
+# ==============================
 # MODELOS
-# =========================================
+# ==============================
 
 class AssessmentCreate(BaseModel):
     class_id: str
@@ -38,9 +37,9 @@ class AnswerKey(BaseModel):
     answers: List[AnswerItem]
 
 
-# =========================================
+# ==============================
 # LISTAR AVALIAÇÕES
-# =========================================
+# ==============================
 
 @router.get("/")
 def list_assessments(user=Depends(get_current_user)):
@@ -53,9 +52,9 @@ def list_assessments(user=Depends(get_current_user)):
     return data.data
 
 
-# =========================================
+# ==============================
 # CRIAR AVALIAÇÃO SIMPLES
-# =========================================
+# ==============================
 
 @router.post("/")
 def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
@@ -76,9 +75,9 @@ def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
     return new_assessment.data
 
 
-# =========================================
+# ==============================
 # CRIAR AVALIAÇÃO + GABARITO
-# =========================================
+# ==============================
 
 @router.post("/create-full")
 def create_assessment_full(data: AssessmentFullCreate, user=Depends(get_current_user)):
@@ -114,9 +113,9 @@ def create_assessment_full(data: AssessmentFullCreate, user=Depends(get_current_
     return assessment
 
 
-# =========================================
-# SALVAR / EDITAR GABARITO
-# =========================================
+# ==============================
+# SALVAR OU EDITAR GABARITO
+# ==============================
 
 @router.post("/answer-key")
 def save_answer_key(data: AnswerKey, user=Depends(get_current_user)):
@@ -124,7 +123,6 @@ def save_answer_key(data: AnswerKey, user=Depends(get_current_user)):
     if user["role"] != "professor":
         raise HTTPException(status_code=403)
 
-    # apagar gabarito antigo
     supabase.table("assessment_questions") \
         .delete() \
         .eq("assessment_id", data.assessment_id) \
@@ -148,28 +146,12 @@ def save_answer_key(data: AnswerKey, user=Depends(get_current_user)):
     return {"message": "gabarito salvo"}
 
 
-# =========================================
+# ==============================
 # BUSCAR GABARITO
-# =========================================
+# ==============================
 
 @router.get("/answer-key/{assessment_id}")
 def get_answer_key(assessment_id: str, user=Depends(get_current_user)):
-
-    data = supabase.table("assessment_questions") \
-        .select("*") \
-        .eq("assessment_id", assessment_id) \
-        .order("question_number") \
-        .execute()
-
-    return data.data
-
-
-# =========================================
-# BUSCAR QUESTÕES DA AVALIAÇÃO
-# =========================================
-
-@router.get("/{assessment_id}/questions")
-def get_assessment_questions(assessment_id: str, user=Depends(get_current_user)):
 
     data = supabase.table("assessment_questions") \
         .select("*") \
