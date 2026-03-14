@@ -39,7 +39,9 @@ def assign_teacher(teacher_id: str, class_id: str, user=Depends(get_current_user
 @router.get("/")
 def list_classes(user=Depends(get_current_user)):
 
-    return supabase.table("classes") \
+    classes = supabase.table("classes") \
         .select("*") \
         .eq("school_id", user["school_id"]) \
-        .execute().data
+        .execute()
+
+    return classes.data
