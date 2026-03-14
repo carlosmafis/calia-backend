@@ -1,3 +1,5 @@
+# services/grading_service.py
+
 from core.config import supabase
 
 
@@ -12,11 +14,11 @@ def calculate_score(assessment_id, answers):
 
     for q in questions:
 
-        number = q["question_number"]
+        number = str(q["question_number"])
         correct = q["correct_answer"]
         weight = q["weight"]
 
-        if answers.get(str(number)) == correct:
+        if answers.get(number) == correct:
             score += weight
 
     return score
