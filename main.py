@@ -9,9 +9,7 @@ from routers import ocr
 from core.auth import get_current_user
 from fastapi import Depends
 
-@app.get("/me")
-def get_me(user=Depends(get_current_user)):
-    return user
+
 app = FastAPI()
 
 app.add_middleware(
@@ -27,6 +25,10 @@ app.include_router(classes.router, prefix="/classes")
 app.include_router(students.router, prefix="/students")
 app.include_router(assessments.router, prefix="/assessments")
 app.include_router(ocr.router, prefix="/ocr")
+
+@app.get("/me")
+def get_me(user=Depends(get_current_user)):
+    return user
 
 @app.get("/")
 def root():
