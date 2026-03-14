@@ -5,7 +5,7 @@ import shutil
 from core.auth import get_current_user
 from core.config import supabase
 
-from services.ocr_service import process_image
+from services.ocr_service import read_answer_sheet
 from services.grading_service import calculate_score
 
 router = APIRouter()
@@ -24,12 +24,33 @@ async def correct_exam(
     with open(file_path,"wb") as buffer:
         shutil.copyfileobj(file.file,buffer)
 
-    answers = process_image(file_path)
+    # buscar gabarito
+
+    questions = supabase.table("assessment_questions") \
+        .select("*") \
+        .eq("assessment_id",assessment_id) \
+        .order("question_number") \
+        .execute().data
+
+    gabarito = [
+        q["correct_answer"] for q in questions
+    ]
+
+    # rodar OCR
+
+    answers = read_answer_sheet(
+        file_path,
+        gabarito
+    )
+
+    # calcular nota
 
     score = calculate_score(
         assessment_id,
         answers
     )
+
+    # salvar resultado
 
     supabase.table("student_submissions").insert({
 
