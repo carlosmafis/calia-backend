@@ -1,10 +1,22 @@
-def calculate_score(student_answers, correct_answers):
+from core.config import supabase
+
+
+def calculate_score(assessment_id, answers):
+
+    questions = supabase.table("assessment_questions") \
+        .select("*") \
+        .eq("assessment_id", assessment_id) \
+        .execute().data
 
     score = 0
 
-    for r, g in zip(student_answers, correct_answers):
+    for q in questions:
 
-        if r == g:
-            score += 1
+        number = q["question_number"]
+        correct = q["correct_answer"]
+        weight = q["weight"]
+
+        if answers.get(str(number)) == correct:
+            score += weight
 
     return score
