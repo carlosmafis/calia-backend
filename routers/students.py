@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from core.config import supabase
 from core.auth import get_current_user
 
-router = APIRouter(prefix="/students", tags=["Students"])
+router = APIRouter(tags=["Students"])
 
 class StudentCreate(BaseModel):
     name: str
