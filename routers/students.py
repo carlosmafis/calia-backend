@@ -24,6 +24,31 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
     }).execute()
 
     return student.data
+    
+import pandas as pd
+from fastapi import UploadFile, File, Depends
+
+@router.post("/upload")
+async def upload_students(
+    class_id:str,
+    file:UploadFile = File(...),
+    user=Depends(get_current_user)
+):
+
+    df = pd.read_csv(file.file)
+
+    for _,row in df.iterrows():
+
+        supabase.table("students").insert({
+
+            "school_id":user["school_id"],
+            "class_id":class_id,
+            "name":row["name"],
+            "status":row.get("status","CURSANDO")
+
+        }).execute()
+
+    return {"message":"Alunos importados"}
 
 @router.get("/")
 def list_students(user=Depends(get_current_user)):
