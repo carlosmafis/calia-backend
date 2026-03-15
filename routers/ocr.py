@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi import APIRouter, UploadFile, File, Depends, Form
 import uuid
 import shutil
 
@@ -13,8 +13,8 @@ router = APIRouter()
 
 @router.post("/correct")
 async def correct_exam(
-    assessment_id: str,
-    student_id: str,
+    assessment_id: str = Form(...),
+    student_id: str = Form(...),
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
