@@ -35,3 +35,22 @@ def create_subject(data: SubjectCreate, user=Depends(get_current_user)):
     }).execute()
 
     return subject.data
+    
+@router.put("/{subject_id}")
+def update_subject(
+    subject_id:str,
+    name:str,
+    user=Depends(get_current_user)
+):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("subjects") \
+        .update({
+            "name":name
+        }) \
+        .eq("id",subject_id) \
+        .execute()
+
+    return {"message":"Disciplina atualizada"}
