@@ -15,8 +15,8 @@ router = APIRouter()
 class TeacherCreate(BaseModel):
     full_name: str
     email: str
-    subject_ids: List[str]
-    class_ids: List[str]
+    subject_ids: List[str] = []
+    class_ids: List[str] = []
 
 
 # ==========================
@@ -26,7 +26,7 @@ class TeacherCreate(BaseModel):
 @router.get("/")
 def list_teachers(user=Depends(get_current_user)):
 
-    if user["role"] != "admin":
+    if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403)
 
     data = supabase.table("profiles") \
@@ -39,7 +39,7 @@ def list_teachers(user=Depends(get_current_user)):
 
 
 # ==========================
-# DISCIPLINAS DO PROFESSOR
+# DISCIPLINAS DO PROFESSOR LOGADO
 # ==========================
 
 @router.get("/my-subjects")
@@ -57,22 +57,43 @@ def my_subjects(user=Depends(get_current_user)):
 
 
 # ==========================
+# TURMAS DO PROFESSOR LOGADO
+# ==========================
+
+@router.get("/my-classes")
+def my_classes(user=Depends(get_current_user)):
+
+    data = supabase.table("teacher_classes") \
+        .select("classes(*)") \
+        .eq("teacher_id", user["id"]) \
+        .execute()
+
+    if not data.data:
+        return []
+
+    return [x["classes"] for x in data.data if x["classes"]]
+
+
+# ==========================
 # CRIAR PROFESSOR
 # ==========================
 
 @router.post("/")
 def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
 
-    if user["role"] != "admin":
+    if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403)
 
     password = "12345678"
 
-    auth = supabase.auth.admin.create_user({
-        "email": data.email,
-        "password": password,
-        "email_confirm": True
-    })
+    try:
+        auth = supabase.auth.admin.create_user({
+            "email": data.email,
+            "password": password,
+            "email_confirm": True
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao criar usuário: {str(e)}")
 
     if not auth.user:
         raise HTTPException(status_code=400, detail="Erro ao criar usuário")
@@ -124,45 +145,71 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
 @router.put("/{teacher_id}")
 def update_teacher(
     teacher_id: str,
-    subject_ids: List[str],
-    class_ids: List[str],
+    data: TeacherCreate,
     user=Depends(get_current_user)
 ):
 
-    if user["role"] != "admin":
+    if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403)
 
+    # Atualizar nome
+    supabase.table("profiles") \
+        .update({"full_name": data.full_name}) \
+        .eq("id", teacher_id) \
+        .execute()
 
-    # remover disciplinas antigas
-
+    # Remover disciplinas antigas
     supabase.table("teacher_subjects") \
         .delete() \
         .eq("teacher_id", teacher_id) \
         .execute()
 
-
-    for subject in subject_ids:
-
+    for subject in data.subject_ids:
         supabase.table("teacher_subjects").insert({
             "teacher_id": teacher_id,
             "subject_id": subject
         }).execute()
 
+    # Remover turmas antigas
+    supabase.table("teacher_classes") \
+        .delete() \
+        .eq("teacher_id", teacher_id) \
+        .execute()
 
-    # remover turmas antigas
+    for cls in data.class_ids:
+        supabase.table("teacher_classes").insert({
+            "teacher_id": teacher_id,
+            "class_id": cls
+        }).execute()
+
+    return {"message": "Professor atualizado"}
+
+
+# ==========================
+# DELETAR PROFESSOR
+# ==========================
+
+@router.delete("/{teacher_id}")
+def delete_teacher(teacher_id: str, user=Depends(get_current_user)):
+
+    if user["role"] not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403)
+
+    # Remover vínculos
+    supabase.table("teacher_subjects") \
+        .delete() \
+        .eq("teacher_id", teacher_id) \
+        .execute()
 
     supabase.table("teacher_classes") \
         .delete() \
         .eq("teacher_id", teacher_id) \
         .execute()
 
+    # Remover perfil
+    supabase.table("profiles") \
+        .delete() \
+        .eq("id", teacher_id) \
+        .execute()
 
-    for cls in class_ids:
-
-        supabase.table("teacher_classes").insert({
-            "teacher_id": teacher_id,
-            "class_id": cls
-        }).execute()
-
-
-    return {"message": "Professor atualizado"}
+    return {"message": "Professor removido"}
