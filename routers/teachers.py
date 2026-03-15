@@ -1,15 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
 from core.config import supabase
 from core.auth import get_current_user
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
+
 
 class TeacherCreate(BaseModel):
     email: str
     full_name: str
     subject_id: str
 
+
+# ==========================
+# CRIAR PROFESSOR
+# ==========================
 
 @router.post("/")
 def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
@@ -25,11 +31,14 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
         "email_confirm": True
     })
 
+    if not auth.user:
+        raise HTTPException(status_code=400, detail="Erro ao criar usuário")
+
     supabase.table("profiles").insert({
         "id": auth.user.id,
         "school_id": user["school_id"],
         "role": "professor",
-        "full_name": data.full_name
+        "full_name": data.full_name,
         "subject_id": data.subject_id
     }).execute()
 
@@ -39,14 +48,20 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
     }
 
 
+# ==========================
+# LISTAR PROFESSORES
+# ==========================
+
 @router.get("/")
 def list_teachers(user=Depends(get_current_user)):
 
     if user["role"] != "admin":
         raise HTTPException(status_code=403)
 
-    return supabase.table("profiles") \
+    data = supabase.table("profiles") \
         .select("*") \
         .eq("school_id", user["school_id"]) \
         .eq("role", "professor") \
-        .execute().data
+        .execute()
+
+    return data.data
