@@ -8,6 +8,7 @@ router = APIRouter(prefix="/teachers", tags=["Teachers"])
 class TeacherCreate(BaseModel):
     email: str
     full_name: str
+    subject_id: str
 
 
 @router.post("/")
@@ -29,6 +30,7 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
         "school_id": user["school_id"],
         "role": "professor",
         "full_name": data.full_name
+        "subject_id": data.subject_id
     }).execute()
 
     return {
