@@ -28,6 +28,15 @@ def list_teachers(user=Depends(get_current_user)):
 
     return data.data
 
+@router.get("/my-subjects")
+def my_subjects(user=Depends(get_current_user)):
+
+    data = supabase.table("teacher_subjects") \
+        .select("subjects(*)") \
+        .eq("teacher_id",user["id"]) \
+        .execute()
+
+    return [x["subjects"] for x in data.data]
 
 @router.post("/")
 def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
