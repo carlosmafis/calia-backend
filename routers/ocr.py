@@ -24,11 +24,14 @@ async def correct_exam(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    questions = supabase.table("assessment_questions") \
-        .select("*") \
-        .eq("assessment_id", assessment_id) \
-        .order("question_number") \
-        .execute().data
+    questions = (
+        supabase.table("assessment_questions")
+        .select("*")
+        .eq("assessment_id", assessment_id)
+        .order("question_number")
+        .execute()
+        .data
+    )
 
     gabarito = [q["correct_answer"] for q in questions]
 
@@ -37,9 +40,9 @@ async def correct_exam(
         gabarito
     )
 
-answers = ocr_result["answers"]
-debug_image = ocr_result["debug_image"]
-    
+    answers = ocr_result["answers"]
+    debug_image = ocr_result["debug_image"]
+
     print("RESPOSTAS OCR:", answers)
 
     score = calculate_score(
