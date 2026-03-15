@@ -32,7 +32,13 @@ async def correct_exam(
 
     gabarito = [q["correct_answer"] for q in questions]
 
-    answers = read_answer_sheet(file_path, gabarito)
+    ocr_result = read_answer_sheet(
+        file_path,
+        gabarito
+    )
+
+answers = ocr_result["answers"]
+debug_image = ocr_result["debug_image"]
     
     print("RESPOSTAS OCR:", answers)
 
@@ -54,5 +60,6 @@ async def correct_exam(
 
     return {
         "answers": answers,
-        "score": score
+        "score": score,
+        "debug_image": debug_image
     }
