@@ -7,6 +7,7 @@ from core.config import supabase
 
 router = APIRouter()
 
+
 # ==========================
 # MODELOS
 # ==========================
@@ -15,9 +16,9 @@ class QuestionItem(BaseModel):
     question_number: int
     correct_answer: str
 
+
 class AssessmentCreate(BaseModel):
     class_id: str
-    subject_id: str
     title: str
     questions: List[QuestionItem]
 
@@ -47,11 +48,20 @@ def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
     if user["role"] != "professor":
         raise HTTPException(status_code=403)
 
+    # disciplina vem automaticamente do professor
+    subject_id = user.get("subject_id")
+
+    if not subject_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Professor não possui disciplina vinculada"
+        )
+
     assessment = supabase.table("assessments").insert({
 
         "school_id": user["school_id"],
         "class_id": data.class_id,
-        "subject_id":data.subject_id,
+        "subject_id": subject_id,
         "created_by": user["id"],
         "title": data.title,
         "total_questions": len(data.questions)
