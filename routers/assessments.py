@@ -19,6 +19,7 @@ class QuestionItem(BaseModel):
 
 class AssessmentCreate(BaseModel):
     class_id: str
+    subject_id:str
     title: str
     questions: List[QuestionItem]
 
