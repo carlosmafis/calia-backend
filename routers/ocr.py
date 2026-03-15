@@ -66,3 +66,37 @@ async def correct_exam(
         "score": score,
         "debug_image": debug_image
     }
+    
+from pydantic import BaseModel
+
+class ConfirmCorrection(BaseModel):
+    assessment_id: str
+    student_id: str
+    answers: dict
+
+
+@router.post("/confirm")
+def confirm_correction(
+    data: ConfirmCorrection,
+    user=Depends(get_current_user)
+):
+
+    score = calculate_score(
+        data.assessment_id,
+        data.answers
+    )
+
+    supabase.table("student_submissions").insert({
+
+        "school_id": user["school_id"],
+        "assessment_id": data.assessment_id,
+        "student_id": data.student_id,
+        "uploaded_by": user["id"],
+        "extracted_answers": data.answers,
+        "score": score
+
+    }).execute()
+
+    return {
+        "score": score
+    }
