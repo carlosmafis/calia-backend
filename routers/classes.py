@@ -49,3 +49,24 @@ def list_classes(user=Depends(get_current_user)):
         .execute()
 
     return classes.data
+    
+@router.put("/{class_id}")
+def update_class(
+    class_id:str,
+    name:str,
+    year:str,
+    user=Depends(get_current_user)
+):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("classes") \
+        .update({
+            "name":name,
+            "year":year
+        }) \
+        .eq("id",class_id) \
+        .execute()
+
+    return {"message":"Turma atualizada"}
