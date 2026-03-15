@@ -71,3 +71,26 @@ def move_student(student_id: str, class_id: str, user=Depends(get_current_user))
     }).eq("id", student_id).execute()
 
     return {"message": "Aluno movido de turma"}
+    
+@router.put("/{student_id}")
+def update_student(
+    student_id:str,
+    name:str,
+    status:str,
+    class_id:str,
+    user=Depends(get_current_user)
+):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    supabase.table("students") \
+        .update({
+            "name":name,
+            "status":status,
+            "class_id":class_id
+        }) \
+        .eq("id",student_id) \
+        .execute()
+
+    return {"message":"Aluno atualizado"}
