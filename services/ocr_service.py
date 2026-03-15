@@ -193,4 +193,13 @@ def read_answer_sheet(image_path, gabarito):
     for i,resp in enumerate(respostas_detectadas):
         answers_dict[str(i+1)] = resp
 
-    return answers_dict
+    import base64
+    import cv2
+    
+    _, buffer = cv2.imencode(".jpg", debug_overlay)
+    debug_base64 = base64.b64encode(buffer).decode()
+    
+    return {
+        "answers": answers_dict,
+        "debug_image": debug_base64
+    }
