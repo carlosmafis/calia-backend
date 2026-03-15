@@ -1,21 +1,33 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from typing import List
 
-from core.config import supabase
 from core.auth import get_current_user
+from core.config import supabase
 
-router = APIRouter(prefix="/teachers", tags=["Teachers"])
-
+router = APIRouter()
 
 class TeacherCreate(BaseModel):
-    email: str
     full_name: str
-    subject_id: str
+    email: str
+    subject_ids: List[str]
+    class_ids: List[str]
 
 
-# ==========================
-# CRIAR PROFESSOR
-# ==========================
+@router.get("/")
+def list_teachers(user=Depends(get_current_user)):
+
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+
+    data = supabase.table("profiles") \
+        .select("*") \
+        .eq("school_id", user["school_id"]) \
+        .eq("role", "professor") \
+        .execute()
+
+    return data.data
+
 
 @router.post("/")
 def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
@@ -31,37 +43,69 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
         "email_confirm": True
     })
 
-    if not auth.user:
-        raise HTTPException(status_code=400, detail="Erro ao criar usuário")
+    teacher_id = auth.user.id
 
     supabase.table("profiles").insert({
-        "id": auth.user.id,
+        "id": teacher_id,
         "school_id": user["school_id"],
         "role": "professor",
-        "full_name": data.full_name,
-        "subject_id": data.subject_id
+        "full_name": data.full_name
     }).execute()
+
+    # disciplinas
+    for subject in data.subject_ids:
+
+        supabase.table("teacher_subjects").insert({
+            "teacher_id": teacher_id,
+            "subject_id": subject
+        }).execute()
+
+    # turmas
+    for cls in data.class_ids:
+
+        supabase.table("teacher_classes").insert({
+            "teacher_id": teacher_id,
+            "class_id": cls
+        }).execute()
 
     return {
         "email": data.email,
-        "temporary_password": password
+        "password": password
     }
-
-
-# ==========================
-# LISTAR PROFESSORES
-# ==========================
-
-@router.get("/")
-def list_teachers(user=Depends(get_current_user)):
+    
+@router.put("/{teacher_id}")
+def update_teacher(
+    teacher_id:str,
+    subject_ids:List[str],
+    class_ids:List[str],
+    user=Depends(get_current_user)
+):
 
     if user["role"] != "admin":
         raise HTTPException(status_code=403)
 
-    data = supabase.table("profiles") \
-        .select("*") \
-        .eq("school_id", user["school_id"]) \
-        .eq("role", "professor") \
+    supabase.table("teacher_subjects") \
+        .delete() \
+        .eq("teacher_id", teacher_id) \
         .execute()
 
-    return data.data
+    for subject in subject_ids:
+
+        supabase.table("teacher_subjects").insert({
+            "teacher_id": teacher_id,
+            "subject_id": subject
+        }).execute()
+
+    supabase.table("teacher_classes") \
+        .delete() \
+        .eq("teacher_id", teacher_id) \
+        .execute()
+
+    for cls in class_ids:
+
+        supabase.table("teacher_classes").insert({
+            "teacher_id": teacher_id,
+            "class_id": cls
+        }).execute()
+
+    return {"message":"Professor atualizado"}
