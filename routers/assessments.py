@@ -17,6 +17,7 @@ class QuestionItem(BaseModel):
 
 class AssessmentCreate(BaseModel):
     class_id: str
+    subject_id: str
     title: str
     questions: List[QuestionItem]
 
@@ -50,6 +51,7 @@ def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
 
         "school_id": user["school_id"],
         "class_id": data.class_id,
+        "subject_id":data.subject_id,
         "created_by": user["id"],
         "title": data.title,
         "total_questions": len(data.questions)
