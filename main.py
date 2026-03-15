@@ -10,7 +10,7 @@ from core.auth import get_current_user
 from fastapi import Depends
 from routers import manual
 from routers import teachers
-from routers import subjects
+from routers.subjects import router as subjects_router
 
 app = FastAPI()
 
@@ -29,7 +29,7 @@ app.include_router(assessments.router, prefix="/assessments")
 app.include_router(ocr.router, prefix="/ocr")
 app.include_router(manual.router)
 app.include_router(teachers.router, prefix="/teachers")
-app.include_router(subjects.router, prefix="/subjects")
+app.include_router(subjects_router, prefix="/subjects")
 
 @app.get("/me")
 def get_me(user=Depends(get_current_user)):
