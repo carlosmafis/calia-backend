@@ -133,6 +133,9 @@ def read_answer_sheet(image_path, gabarito):
 
     grade = gray[top:bottom, left:right]
 
+    # overlay agora é a folha inteira
+    debug_overlay = warped.copy()
+
     h_grade, w_grade = grade.shape
 
     altura_linha = h_grade / 10.0
@@ -144,6 +147,7 @@ def read_answer_sheet(image_path, gabarito):
     for i in range(len(gabarito)):
 
         alternativas = []
+        centros = []
 
         for pos in posicoes_colunas:
 
@@ -161,6 +165,7 @@ def read_answer_sheet(image_path, gabarito):
             media_intensidade = np.mean(celula)
 
             alternativas.append(media_intensidade)
+            centros.append((centro_x, centro_y))
 
         media = np.mean(alternativas)
         desvio = np.std(alternativas)
@@ -180,6 +185,17 @@ def read_answer_sheet(image_path, gabarito):
 
             respostas_detectadas.append("ANULADA")
 
+            for idx in marcadas:
+                cx, cy = centros[idx]
+
+                cv2.circle(
+                    debug_overlay,
+                    (cx + left, cy + top),
+                    raio,
+                    (0,255,255),
+                    3
+                )
+
         else:
 
             idx = marcadas[0]
@@ -188,17 +204,37 @@ def read_answer_sheet(image_path, gabarito):
                 ["A","B","C","D","E"][idx]
             )
 
+            cx, cy = centros[idx]
+
+            cv2.circle(
+                debug_overlay,
+                (cx + left, cy + top),
+                raio,
+                (0,255,0),
+                3
+            )
+
+        # número da questão
+        cv2.putText(
+            debug_overlay,
+            str(i+1),
+            (int(w_grade*0.05)+left, int((i+0.5)*altura_linha)+top),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255,0,0),
+            2
+        )
+
     answers_dict = {}
 
     for i,resp in enumerate(respostas_detectadas):
         answers_dict[str(i+1)] = resp
 
     import base64
-    import cv2
-    
+
     _, buffer = cv2.imencode(".jpg", debug_overlay)
     debug_base64 = base64.b64encode(buffer).decode()
-    
+
     return {
         "answers": answers_dict,
         "debug_image": debug_base64
