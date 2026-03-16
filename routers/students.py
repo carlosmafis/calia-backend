@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel
 from typing import Optional
+import secrets
+import string
 
 from core.config import supabase
 from core.auth import get_current_user
@@ -14,6 +16,36 @@ class StudentCreate(BaseModel):
     name: str
     class_id: str
     status: str = "CURSANDO"
+    registration_number: Optional[str] = None
+
+
+def generate_temp_password(length: int = 12) -> str:
+    """Gera uma senha temporária aleatória."""
+    characters = string.ascii_letters + string.digits + "!@#$%"
+    return ''.join(secrets.choice(characters) for _ in range(length))
+
+
+def create_supabase_user(email: str, password: str) -> dict:
+    """Cria um usuário no Supabase Auth."""
+    try:
+        user = supabase.auth.sign_up({
+            "email": email,
+            "password": password
+        })
+        return {"success": True, "user_id": user.user.id, "email": email, "temp_password": password}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def get_school_domain(school_id: str) -> str:
+    """Obtém o domínio da escola para gerar o email do aluno."""
+    try:
+        school = supabase.table("schools").select("slug").eq("id", school_id).execute()
+        if school.data:
+            return school.data[0].get("slug", "escola")
+    except:
+        pass
+    return "escola"
 
 
 # ==========================
@@ -48,14 +80,37 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
     if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403)
 
+    school_domain = get_school_domain(user["school_id"])
+    registration = data.registration_number or data.name.lower().replace(" ", "_")
+    email = f"{registration}@{school_domain}.com.br"
+    
+    temp_password = generate_temp_password()
+    
+    auth_result = create_supabase_user(email, temp_password)
+    
+    if not auth_result["success"]:
+        raise HTTPException(status_code=400, detail=f"Erro ao criar usuario: {auth_result['error']}")
+    
     student = supabase.table("students").insert({
         "school_id": user["school_id"],
         "class_id": data.class_id,
         "name": data.name,
-        "status": data.status
+        "status": data.status,
+        "email": email,
+        "registration_number": registration
     }).execute()
-
-    return student.data
+    
+    if not student.data:
+        raise HTTPException(status_code=400, detail="Erro ao criar aluno")
+    
+    return {
+        "student": student.data[0],
+        "credentials": {
+            "email": email,
+            "temp_password": temp_password,
+            "message": "Credenciais temporarias. O aluno deve trocar a senha no primeiro login."
+        }
+    }
 
 
 # ==========================
