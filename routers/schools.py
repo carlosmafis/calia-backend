@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+import secrets
+import string
 
 from core.config import supabase
 from core.auth import get_current_user
@@ -20,6 +22,12 @@ class SchoolAdminCreate(BaseModel):
     plan: str = "free"
     admin_name: Optional[str] = None
     admin_email: Optional[str] = None
+
+
+def generate_temp_password(length: int = 12) -> str:
+    """Gera uma senha temporária aleatória."""
+    characters = string.ascii_letters + string.digits + "!@#$%"
+    return ''.join(secrets.choice(characters) for _ in range(length))
 
 
 # ==========================
@@ -98,33 +106,52 @@ def create_school_with_admin(data: SchoolAdminCreate, user=Depends(get_current_u
 
     # 2. Criar admin da escola (se email fornecido)
     if data.admin_email:
-        password = "12345678"
+        temp_password = generate_temp_password()
 
         try:
+            # Criar usuario no Supabase Auth
             auth = supabase.auth.admin.create_user({
                 "email": data.admin_email,
-                "password": password,
+                "password": temp_password,
                 "email_confirm": True
             })
 
             if auth.user:
-                supabase.table("profiles").insert({
+                # Criar profile na tabela profiles
+                profile_data = {
                     "id": auth.user.id,
                     "school_id": school["id"],
                     "role": "admin",
                     "full_name": data.admin_name or "Administrador"
-                }).execute()
+                }
+                
+                profile_result = supabase.table("profiles").insert(profile_data).execute()
+                
+                if not profile_result.data:
+                    raise Exception(f"Falha ao criar profile: {profile_result}")
 
                 return {
                     "school": school,
-                    "admin_email": data.admin_email,
-                    "admin_password": password
+                    "admin": {
+                        "id": auth.user.id,
+                        "full_name": data.admin_name or "Administrador",
+                        "email": data.admin_email
+                    },
+                    "credentials": {
+                        "email": data.admin_email,
+                        "temp_password": temp_password,
+                        "message": "Credenciais temporarias. O admin deve trocar a senha no primeiro login."
+                    }
                 }
+            else:
+                raise Exception("Falha ao criar usuario no Supabase Auth")
         except Exception as e:
             # Escola foi criada mas admin falhou
+            import traceback
+            error_msg = f"{str(e)}\n{traceback.format_exc()}"
             return {
                 "school": school,
-                "admin_error": str(e)
+                "admin_error": error_msg
             }
 
     return {"school": school}

@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from typing import List
+import secrets
+import string
+import pandas as pd
 
 from core.auth import get_current_user
 from core.config import supabase
@@ -17,6 +20,12 @@ class TeacherCreate(BaseModel):
     email: str
     subject_ids: List[str] = []
     class_ids: List[str] = []
+
+
+def generate_temp_password(length: int = 12) -> str:
+    """Gera uma senha temporária aleatória."""
+    characters = string.ascii_letters + string.digits + "!@#$%"
+    return ''.join(secrets.choice(characters) for _ in range(length))
 
 
 # ==========================
@@ -84,12 +93,12 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
     if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403)
 
-    password = "12345678"
+    temp_password = generate_temp_password()
 
     try:
         auth = supabase.auth.admin.create_user({
             "email": data.email,
-            "password": password,
+            "password": temp_password,
             "email_confirm": True
         })
     except Exception as e:
@@ -133,8 +142,16 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
 
 
     return {
-        "email": data.email,
-        "password": password
+        "teacher": {
+            "id": teacher_id,
+            "full_name": data.full_name,
+            "email": data.email
+        },
+        "credentials": {
+            "email": data.email,
+            "temp_password": temp_password,
+            "message": "Credenciais temporarias. O professor deve trocar a senha no primeiro login."
+        }
     }
 
 
@@ -213,3 +230,72 @@ def delete_teacher(teacher_id: str, user=Depends(get_current_user)):
         .execute()
 
     return {"message": "Professor removido"}
+
+
+# ==========================
+# IMPORTAR PROFESSORES VIA CSV
+# ==========================
+
+@router.post("/upload")
+async def upload_teachers(
+    file: UploadFile = File(...),
+    user=Depends(get_current_user)
+):
+
+    if user["role"] not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403)
+
+    try:
+        df = pd.read_csv(file.file)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao ler CSV: {str(e)}")
+
+    count = 0
+    errors = []
+    credentials_list = []
+
+    for idx, row in df.iterrows():
+        try:
+            full_name = row.get("Nome Completo") or row.get("name")
+            email = row.get("Email") or row.get("email")
+            
+            if not full_name or not email:
+                errors.append(f"Erro na linha {idx + 2}: Nome Completo e Email são obrigatórios")
+                continue
+            
+            temp_password = generate_temp_password()
+            
+            # Criar usuário no Supabase Auth
+            auth = supabase.auth.admin.create_user({
+                "email": email,
+                "password": temp_password,
+                "email_confirm": True
+            })
+            
+            if not auth.user:
+                errors.append(f"Erro na linha {idx + 2}: Falha ao criar usuário no Supabase")
+                continue
+            
+            # Criar profile
+            supabase.table("profiles").insert({
+                "id": auth.user.id,
+                "school_id": user["school_id"],
+                "role": "professor",
+                "full_name": full_name
+            }).execute()
+            
+            credentials_list.append({
+                "full_name": full_name,
+                "email": email,
+                "temp_password": temp_password
+            })
+            
+            count += 1
+        except Exception as e:
+            errors.append(f"Erro na linha {idx + 2}: {str(e)}")
+
+    return {
+        "message": f"{count} professores importados",
+        "errors": errors,
+        "credentials": credentials_list
+    }
