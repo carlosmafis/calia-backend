@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
 from pydantic import BaseModel
 from typing import Optional
 import secrets
@@ -28,9 +28,10 @@ def generate_temp_password(length: int = 12) -> str:
 def create_supabase_user(email: str, password: str) -> dict:
     """Cria um usuário no Supabase Auth."""
     try:
-        user = supabase.auth.sign_up({
+        user = supabase.auth.admin.create_user({
             "email": email,
-            "password": password
+            "password": password,
+            "email_confirm": True
         })
         return {"success": True, "user_id": user.user.id, "email": email, "temp_password": password}
     except Exception as e:
@@ -46,7 +47,6 @@ def get_school_domain(school_id: str) -> str:
     except:
         pass
     return "escola"
-
 
 # ==========================
 # LISTAR ALUNOS
@@ -134,22 +134,59 @@ async def upload_students(
 
     count = 0
     errors = []
+    credentials_list = []
+    school_domain = get_school_domain(user["school_id"])
 
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         try:
+            name = row.get("Nome") or row.get("name")
+            registration = row.get("Matricula") or row.get("registration_number")
+            
+            if not name:
+                errors.append(f"Erro na linha {idx + 2}: Nome eh obrigatorio")
+                continue
+            
+            if not registration:
+                registration = name.lower().replace(" ", "_")
+            
+            email = f"{registration}@{school_domain}.com.br"
+            temp_password = generate_temp_password()
+            
+            # Criar usuario no Supabase Auth
+            auth = supabase.auth.admin.create_user({
+                "email": email,
+                "password": temp_password,
+                "email_confirm": True
+            })
+            
+            if not auth.user:
+                errors.append(f"Erro na linha {idx + 2}: Falha ao criar usuario no Supabase")
+                continue
+            
+            # Criar registro de aluno
             supabase.table("students").insert({
                 "school_id": user["school_id"],
                 "class_id": class_id,
-                "name": row["name"],
-                "status": row.get("status", "CURSANDO")
+                "name": name,
+                "status": row.get("Turma") or row.get("status") or "CURSANDO",
+                "email": email,
+                "registration_number": registration
             }).execute()
+            
+            credentials_list.append({
+                "name": name,
+                "email": email,
+                "temp_password": temp_password
+            })
+            
             count += 1
         except Exception as e:
-            errors.append(f"Erro na linha {_ + 1}: {str(e)}")
+            errors.append(f"Erro na linha {idx + 2}: {str(e)}")
 
     return {
         "message": f"{count} alunos importados",
-        "errors": errors
+        "errors": errors,
+        "credentials": credentials_list
     }
 
 
@@ -212,18 +249,3 @@ def delete_student(student_id: str, user=Depends(get_current_user)):
         .execute()
 
     return {"message": "Aluno removido"}
-
-
-# ==========================
-# NOTAS DE UM ALUNO
-# ==========================
-
-@router.get("/{student_id}/grades")
-def get_student_grades(student_id: str, user=Depends(get_current_user)):
-
-    submissions = supabase.table("student_submissions") \
-        .select("*, assessments(title, subject_id)") \
-        .eq("student_id", student_id) \
-        .execute()
-
-    return submissions.data or []

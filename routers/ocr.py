@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Depends, Form
+from pydantic import BaseModel
 import uuid
 import shutil
 
@@ -66,8 +67,7 @@ async def correct_exam(
         "score": score,
         "debug_image": debug_image
     }
-    
-from pydantic import BaseModel
+
 
 class ConfirmCorrection(BaseModel):
     assessment_id: str
@@ -86,17 +86,33 @@ def confirm_correction(
         data.answers
     )
 
-    supabase.table("student_submissions").insert({
-
+    # Verificar se ja existe submissao
+    existing = supabase.table("student_submissions") \
+        .select("id") \
+        .eq("assessment_id", data.assessment_id) \
+        .eq("student_id", data.student_id) \
+        .execute()
+    
+    submission_data = {
         "school_id": user["school_id"],
         "assessment_id": data.assessment_id,
         "student_id": data.student_id,
         "uploaded_by": user["id"],
         "extracted_answers": data.answers,
         "score": score
-
-    }).execute()
+    }
+    
+    if existing.data and len(existing.data) > 0:
+        # Atualizar submissao existente
+        supabase.table("student_submissions") \
+            .update(submission_data) \
+            .eq("id", existing.data[0]["id"]) \
+            .execute()
+    else:
+        # Criar nova submissao
+        supabase.table("student_submissions").insert(submission_data).execute()
 
     return {
-        "score": score
+        "score": score,
+        "message": "Correcao salva com sucesso"
     }
