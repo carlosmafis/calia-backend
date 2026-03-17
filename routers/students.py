@@ -39,7 +39,7 @@ def create_supabase_user(email: str, password: str) -> dict:
 
 
 def get_school_domain(school_id: str) -> str:
-    """Obtém o domínio da escola para gerar o email do aluno."""
+    """Obtém o slug da escola para gerar o email do aluno."""
     try:
         school = supabase.table("schools").select("slug").eq("id", school_id).execute()
         if school.data:
@@ -82,7 +82,7 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
 
     school_domain = get_school_domain(user["school_id"])
     registration = data.registration_number or data.name.lower().replace(" ", "_")
-    email = f"{registration}@{school_domain}.com.br"
+    email = f"{registration}@{school_domain}.com"
     
     temp_password = generate_temp_password()
     
@@ -94,6 +94,7 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
     student = supabase.table("students").insert({
         "school_id": user["school_id"],
         "class_id": data.class_id,
+        "user_id": auth_result["user_id"],
         "name": data.name,
         "status": data.status,
         "email": email,
@@ -149,7 +150,7 @@ async def upload_students(
             if not registration:
                 registration = name.lower().replace(" ", "_")
             
-            email = f"{registration}@{school_domain}.com.br"
+            email = f"{registration}@{school_domain}.com"
             temp_password = generate_temp_password()
             
             # Criar usuario no Supabase Auth
@@ -167,6 +168,7 @@ async def upload_students(
             supabase.table("students").insert({
                 "school_id": user["school_id"],
                 "class_id": class_id,
+                "user_id": auth.user.id,
                 "name": name,
                 "status": row.get("Turma") or row.get("status") or "CURSANDO",
                 "email": email,

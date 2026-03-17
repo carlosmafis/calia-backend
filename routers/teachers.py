@@ -113,7 +113,8 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
         "id": teacher_id,
         "school_id": user["school_id"],
         "role": "professor",
-        "full_name": data.full_name
+        "full_name": data.full_name,
+        "email": data.email
     }).execute()
 
 
@@ -281,7 +282,8 @@ async def upload_teachers(
                 "id": auth.user.id,
                 "school_id": user["school_id"],
                 "role": "professor",
-                "full_name": full_name
+                "full_name": full_name,
+                "email": email
             }).execute()
             
             credentials_list.append({

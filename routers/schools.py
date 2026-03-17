@@ -122,7 +122,8 @@ def create_school_with_admin(data: SchoolAdminCreate, user=Depends(get_current_u
                     "id": auth.user.id,
                     "school_id": school["id"],
                     "role": "admin",
-                    "full_name": data.admin_name or "Administrador"
+                    "full_name": data.admin_name or "Administrador",
+                    "email": data.admin_email
                 }
                 
                 profile_result = supabase.table("profiles").insert(profile_data).execute()
