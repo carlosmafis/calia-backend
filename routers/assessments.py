@@ -5,7 +5,7 @@ from typing import List
 from core.auth import get_current_user
 from core.config import supabase
 
-router = APIRouter()
+router = APIRouter(tags=["Assessments"])
 
 
 # ==========================
@@ -30,7 +30,6 @@ class AssessmentCreate(BaseModel):
 # ==========================
 
 @router.get("/")
-@router.get("")
 def list_assessments(user=Depends(get_current_user)):
 
     if user["role"] == "professor":
@@ -97,7 +96,6 @@ def get_assessment(assessment_id: str, user=Depends(get_current_user)):
 
 @router.post("/create-full")
 @router.post("/")
-@router.post("")
 def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
 
     # Permitir professor e admin criarem avaliações

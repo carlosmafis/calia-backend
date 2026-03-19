@@ -16,7 +16,6 @@ class SubjectCreate(BaseModel):
 # ==========================
 
 @router.get("/")
-@router.get("")
 def list_subjects(user=Depends(get_current_user)):
 
     data = supabase.table("subjects") \
@@ -32,7 +31,6 @@ def list_subjects(user=Depends(get_current_user)):
 # ==========================
 
 @router.post("/")
-@router.post("")
 def create_subject(data: SubjectCreate, user=Depends(get_current_user)):
 
     if user["role"] not in ("admin", "super_admin"):

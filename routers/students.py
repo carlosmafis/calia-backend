@@ -53,7 +53,6 @@ def get_school_domain(school_id: str) -> str:
 # ==========================
 
 @router.get("/")
-@router.get("")
 def list_students(
     class_id: Optional[str] = Query(None),
     user=Depends(get_current_user)
@@ -76,7 +75,6 @@ def list_students(
 # ==========================
 
 @router.post("/")
-@router.post("")
 def create_student(data: StudentCreate, user=Depends(get_current_user)):
 
     if user["role"] not in ("admin", "super_admin"):

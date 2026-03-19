@@ -17,7 +17,6 @@ class ClassCreate(BaseModel):
 # ==========================
 
 @router.get("/")
-@router.get("")
 def list_classes(user=Depends(get_current_user)):
 
     try:
@@ -49,7 +48,6 @@ def list_classes(user=Depends(get_current_user)):
 # ==========================
 
 @router.post("/")
-@router.post("")
 def create_class(data: ClassCreate, user=Depends(get_current_user)):
 
     if user["role"] not in ("admin", "super_admin"):
