@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List
+import logging
 
 from core.auth import get_current_user
 from core.config import supabase
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Assessments"])
 
@@ -91,13 +94,15 @@ def get_assessment(assessment_id: str, user=Depends(get_current_user)):
 
 
 # ==========================
-# CRIAR AVALIAÇÃO + GABARITO
+# CRIAR AVALIAÇÃO (ROTA 1: /create-full)
 # ==========================
 
 @router.post("/create-full")
-@router.post("/")
-def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
-
+def create_assessment_full(data: AssessmentCreate, user=Depends(get_current_user)):
+    """Criar avaliação com todas as questões de uma vez"""
+    
+    logger.info(f"POST /assessments/create-full - User: {user.get('email')}")
+    
     # Permitir professor e admin criarem avaliações
     if user["role"] not in ("professor", "admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Sem permissão para criar avaliação")
@@ -134,8 +139,10 @@ def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
         if rows:
             supabase.table("assessment_questions").insert(rows).execute()
 
+        logger.info(f"Assessment created: {assessment['id']}")
         return {"message": "Avaliação criada com sucesso", "data": assessment}
     except Exception as e:
+        logger.error(f"Error creating assessment: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao criar avaliação: {str(e)}")
 
 
@@ -144,7 +151,6 @@ def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
 # ==========================
 
 @router.get("/{assessment_id}/results")
-@router.get("/{assessment_id}/results/")
 def get_assessment_results(assessment_id: str, user=Depends(get_current_user)):
 
     try:
