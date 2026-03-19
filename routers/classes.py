@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from typing import Union
 
 from core.config import supabase
 from core.auth import get_current_user
@@ -9,7 +10,7 @@ router = APIRouter(tags=["Classes"])
 
 class ClassCreate(BaseModel):
     name: str
-    year: str
+    year: Union[str, int]  # Aceita string ou número
 
 
 # ==========================
@@ -54,16 +55,17 @@ def create_class(data: ClassCreate, user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Apenas administradores podem criar turmas")
 
     # Validar dados
-    if not data.name or not data.name.strip():
+    if not data.name or not str(data.name).strip():
         raise HTTPException(status_code=400, detail="Nome da turma é obrigatório")
-    if not data.year or not data.year.strip():
+    if not data.year:
         raise HTTPException(status_code=400, detail="Ano/série é obrigatório")
 
     try:
+        year_str = str(data.year).strip() if isinstance(data.year, str) else str(data.year)
         new_class = supabase.table("classes").insert({
             "school_id": user["school_id"],
-            "name": data.name.strip(),
-            "year": data.year.strip()
+            "name": str(data.name).strip(),
+            "year": year_str
         }).execute()
 
         if not new_class.data:
