@@ -96,39 +96,49 @@ def get_assessment(assessment_id: str, user=Depends(get_current_user)):
 # ==========================
 
 @router.post("/create-full")
+@router.post("/")
+@router.post("")
 def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
 
     # Permitir professor e admin criarem avaliações
-    if user["role"] not in ("professor", "admin"):
+    if user["role"] not in ("professor", "admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Sem permissão para criar avaliação")
 
-    assessment = supabase.table("assessments").insert({
+    # Validar dados
+    if not data.class_id:
+        raise HTTPException(status_code=400, detail="class_id é obrigatório")
+    if not data.subject_id:
+        raise HTTPException(status_code=400, detail="subject_id é obrigatório")
+    if not data.title or not data.title.strip():
+        raise HTTPException(status_code=400, detail="title é obrigatório")
+    if not data.questions or len(data.questions) == 0:
+        raise HTTPException(status_code=400, detail="questions não pode estar vazio")
 
-        "school_id": user["school_id"],
-        "class_id": data.class_id,
-        "subject_id": data.subject_id,
-        "created_by": user["id"],
-        "title": data.title,
-        "total_questions": len(data.questions)
+    try:
+        assessment = supabase.table("assessments").insert({
+            "school_id": user["school_id"],
+            "class_id": data.class_id,
+            "subject_id": data.subject_id,
+            "created_by": user["id"],
+            "title": data.title.strip(),
+            "total_questions": len(data.questions)
+        }).execute().data[0]
 
-    }).execute().data[0]
+        rows = []
+        for q in data.questions:
+            rows.append({
+                "assessment_id": assessment["id"],
+                "question_number": q.question_number,
+                "correct_answer": q.correct_answer,
+                "weight": q.weight
+            })
 
-    rows = []
+        if rows:
+            supabase.table("assessment_questions").insert(rows).execute()
 
-    for q in data.questions:
-
-        rows.append({
-
-            "assessment_id": assessment["id"],
-            "question_number": q.question_number,
-            "correct_answer": q.correct_answer,
-            "weight": q.weight
-
-        })
-
-    supabase.table("assessment_questions").insert(rows).execute()
-
-    return assessment
+        return {"message": "Avaliação criada com sucesso", "data": assessment}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao criar avaliação: {str(e)}")
 
 
 # ==========================
@@ -136,11 +146,15 @@ def create_assessment(data: AssessmentCreate, user=Depends(get_current_user)):
 # ==========================
 
 @router.get("/{assessment_id}/results")
+@router.get("/{assessment_id}/results/")
 def get_assessment_results(assessment_id: str, user=Depends(get_current_user)):
 
-    submissions = supabase.table("student_submissions") \
-        .select("*, students(name)") \
-        .eq("assessment_id", assessment_id) \
-        .execute()
+    try:
+        submissions = supabase.table("student_submissions") \
+            .select("*, students(name)") \
+            .eq("assessment_id", assessment_id) \
+            .execute()
 
-    return submissions.data or []
+        return submissions.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar resultados: {str(e)}")
