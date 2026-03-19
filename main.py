@@ -1,5 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import requests
+import os
+
+from core.config import supabase
+from core.auth import get_current_user
 
 from routers import schools
 from routers import classes
@@ -11,8 +17,6 @@ from routers import teachers
 from routers import dashboard
 from routers import users
 from routers.subjects import router as subjects_router
-from core.auth import get_current_user
-from fastapi import Depends
 
 app = FastAPI(title="Calia Digital API", version="2.0.0")
 
@@ -52,6 +56,22 @@ app.include_router(dashboard.router)
 
 
 # ==========================
+# MODELS
+# ==========================
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    name: str = None
+    full_name: str = None
+    avatar_url: str = None
+    phone: str = None
+
+
+# ==========================
 # ENDPOINT /me — Retorna perfil completo do usuário logado
 # ==========================
 
@@ -69,6 +89,106 @@ def get_me(user=Depends(get_current_user)):
         "name": user.get("full_name") or user.get("name") or user.get("email", ""),
         "full_name": user.get("full_name", ""),
     }
+
+
+# ==========================
+# ENDPOINT /me/change-password
+# ==========================
+
+@app.put("/me/change-password")
+def change_password(data: PasswordChangeRequest, user=Depends(get_current_user)):
+    """
+    Permite que o usuário logado altere sua senha.
+    Requer a senha atual para validação.
+    """
+    
+    if not data.current_password or not data.new_password:
+        raise HTTPException(status_code=400, detail="Senha atual e nova senha são obrigatórias")
+    
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Nova senha deve ter pelo menos 6 caracteres")
+    
+    try:
+        # Configurações do Supabase
+        SUPABASE_URL = os.getenv("SUPABASE_URL", "https://lhydfllckxuzotondmla.supabase.co")
+        SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeWRmbGxja3h1em90b25kbWxhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzOTYxNTQsImV4cCI6MjA4Nzk3MjE1NH0.PvwKkuSX8tJXHmoztSodHqMoFCsbJyslhDHnxeAGHjs")
+        
+        # Validar senha atual
+        login_response = requests.post(
+            f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+            json={"email": user["email"], "password": data.current_password},
+            headers={
+                "Content-Type": "application/json",
+                "apikey": SUPABASE_ANON_KEY,
+            }
+        )
+        
+        if not login_response.ok:
+            raise HTTPException(status_code=401, detail="Senha atual incorreta")
+        
+        # Alterar senha usando o endpoint do Supabase
+        access_token = login_response.json().get("access_token")
+        update_response = requests.put(
+            f"{SUPABASE_URL}/auth/v1/user",
+            json={"password": data.new_password},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {access_token}",
+                "apikey": SUPABASE_ANON_KEY,
+            }
+        )
+        
+        if not update_response.ok:
+            raise HTTPException(status_code=500, detail="Erro ao alterar senha")
+        
+        return {"message": "Senha alterada com sucesso"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao alterar senha: {str(e)}")
+
+
+# ==========================
+# ENDPOINT /me/update
+# ==========================
+
+@app.put("/me/update")
+def update_profile(data: ProfileUpdateRequest, user=Depends(get_current_user)):
+    """
+    Permite que o usuário logado atualize seu perfil.
+    """
+    
+    try:
+        # Preparar dados para atualizar
+        update_data = {}
+        if data.name:
+            update_data["full_name"] = data.name
+        if data.full_name:
+            update_data["full_name"] = data.full_name
+        if data.avatar_url:
+            update_data["avatar_url"] = data.avatar_url
+        if data.phone:
+            update_data["phone"] = data.phone
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+        
+        # Atualizar na tabela profiles
+        result = supabase.table("profiles") \
+            .update(update_data) \
+            .eq("id", user["id"]) \
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Erro ao atualizar perfil")
+        
+        return {"message": "Perfil atualizado com sucesso", "data": result.data[0]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar perfil: {str(e)}")
 
 
 # ==========================
