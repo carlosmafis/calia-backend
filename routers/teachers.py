@@ -33,6 +33,7 @@ def generate_temp_password(length: int = 12) -> str:
 # ==========================
 
 @router.get("/")
+@router.get("")
 def list_teachers(user=Depends(get_current_user)):
 
     if user["role"] not in ("admin", "super_admin"):
@@ -88,6 +89,7 @@ def my_classes(user=Depends(get_current_user)):
 # ==========================
 
 @router.post("/")
+@router.post("")
 def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
 
     if user["role"] not in ("admin", "super_admin"):

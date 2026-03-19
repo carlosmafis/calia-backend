@@ -17,6 +17,7 @@ class ClassCreate(BaseModel):
 # ==========================
 
 @router.get("/")
+@router.get("")
 def list_classes(user=Depends(get_current_user)):
 
     try:
@@ -48,6 +49,7 @@ def list_classes(user=Depends(get_current_user)):
 # ==========================
 
 @router.post("/")
+@router.post("")
 def create_class(data: ClassCreate, user=Depends(get_current_user)):
 
     if user["role"] not in ("admin", "super_admin"):
@@ -155,6 +157,7 @@ def delete_class(class_id: str = None, user=Depends(get_current_user)):
 # ==========================
 
 @router.get("/{class_id}/students")
+@router.get("/{class_id}/students/")
 def get_class_students(class_id: str = None, user=Depends(get_current_user)):
 
     try:

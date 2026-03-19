@@ -30,6 +30,7 @@ class AssessmentCreate(BaseModel):
 # ==========================
 
 @router.get("/")
+@router.get("")
 def list_assessments(user=Depends(get_current_user)):
 
     if user["role"] == "professor":

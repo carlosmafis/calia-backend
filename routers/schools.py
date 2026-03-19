@@ -35,6 +35,7 @@ def generate_temp_password(length: int = 12) -> str:
 # ==========================
 
 @router.get("/")
+@router.get("")
 def list_schools(user=Depends(get_current_user)):
 
     if user["role"] == "super_admin":
@@ -73,6 +74,7 @@ def get_school(school_id: str, user=Depends(get_current_user)):
 # ==========================
 
 @router.post("/")
+@router.post("")
 def create_school(data: SchoolCreate, user=Depends(get_current_user)):
 
     if user["role"] != "super_admin":
