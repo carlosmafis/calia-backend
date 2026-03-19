@@ -18,7 +18,7 @@ from routers import dashboard
 from routers import users
 from routers.subjects import router as subjects_router
 
-app = FastAPI(title="Calia Digital API", version="2.0.0")
+app = FastAPI(title="Calia Digital API", version="2.0.0", redirect_slashes=False)
 
 # ==========================
 # CORS — permitir frontend antigo, novo e localhost
