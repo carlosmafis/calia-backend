@@ -9,6 +9,7 @@ from routers import ocr
 from routers import manual
 from routers import teachers
 from routers import dashboard
+from routers import users
 from routers.subjects import router as subjects_router
 from core.auth import get_current_user
 from fastapi import Depends
@@ -45,6 +46,7 @@ app.include_router(assessments.router, prefix="/assessments")
 app.include_router(ocr.router, prefix="/ocr")
 app.include_router(manual.router)
 app.include_router(teachers.router, prefix="/teachers")
+app.include_router(users.router, prefix="/users")
 app.include_router(subjects_router, prefix="/subjects")
 app.include_router(dashboard.router)
 
