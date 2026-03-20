@@ -81,8 +81,24 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
         raise HTTPException(status_code=403)
 
     school_domain = get_school_domain(user["school_id"])
-    registration = data.registration_number or data.name.lower().replace(" ", "_")
-    email = f"{registration}@{school_domain}.com"
+    base_registration = data.registration_number or data.name.lower().replace(" ", "_")
+
+    registration = base_registration
+    counter = 1
+    
+    while True:
+        email = f"{registration}@{school_domain}.com"
+    
+        existing = supabase.table("students") \
+            .select("id") \
+            .eq("email", email) \
+            .execute()
+    
+        if not existing.data:
+            break
+    
+        registration = f"{base_registration}{counter}"
+        counter += 1
     
     temp_password = generate_temp_password()
     
