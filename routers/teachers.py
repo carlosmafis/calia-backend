@@ -93,7 +93,7 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
     if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403)
 
-    temp_password = generate_temp_password()
+    temp_password = "12345678"
 
     try:
         auth = supabase.auth.admin.create_user({
@@ -151,7 +151,7 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
         "credentials": {
             "email": data.email,
             "temp_password": temp_password,
-            "message": "Credenciais temporarias. O professor deve trocar a senha no primeiro login."
+            "message": "Senha padrão: 12345678. O professor deve trocar a senha no primeiro login."
         }
     }
 

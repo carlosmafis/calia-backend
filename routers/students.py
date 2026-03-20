@@ -81,15 +81,50 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
         raise HTTPException(status_code=403)
 
     school_domain = get_school_domain(user["school_id"])
-    registration = data.registration_number or data.name.lower().replace(" ", "_")
+
+    # 🔥 NOVA REGRA: matrícula obrigatória
+    if not data.registration_number:
+        raise HTTPException(status_code=400, detail="Matrícula é obrigatória")
+
+    registration = data.registration_number.strip()
+
+    # 🔥 Verificar duplicidade de matrícula
+    existing = supabase.table("students") \
+        .select("id") \
+        .eq("registration_number", registration) \
+        .execute()
+
+    if existing.data:
+        raise HTTPException(status_code=400, detail="Matrícula já cadastrada")
+
     email = f"{registration}@{school_domain}.com"
-    
-    temp_password = generate_temp_password()
-    
+
+    # 🔥 Verificar duplicidade de email
+    existing_email = supabase.table("students") \
+        .select("id") \
+        .eq("email", email) \
+        .execute()
+
+    if existing_email.data:
+        raise HTTPException(status_code=400, detail="Email já cadastrado")
+
+    # 🔥 senha = matrícula
+    temp_password = registration
+
     auth_result = create_supabase_user(email, temp_password)
     
+    # ✅ PRIMEIRO valida
     if not auth_result["success"]:
         raise HTTPException(status_code=400, detail=f"Erro ao criar usuario: {auth_result['error']}")
+    
+    # ✅ AGORA usa com segurança
+    supabase.table("profiles").insert({
+        "id": auth_result["user_id"],
+        "school_id": user["school_id"],
+        "role": "student",
+        "full_name": data.name,
+        "email": email
+    }).execute()
     
     student = supabase.table("students").insert({
         "school_id": user["school_id"],
@@ -100,16 +135,16 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
         "email": email,
         "registration_number": registration
     }).execute()
-    
+
     if not student.data:
         raise HTTPException(status_code=400, detail="Erro ao criar aluno")
-    
+
     return {
         "student": student.data[0],
         "credentials": {
             "email": email,
             "temp_password": temp_password,
-            "message": "Credenciais temporarias. O aluno deve trocar a senha no primeiro login."
+            "message": "Senha padrão: matrícula. O aluno deve trocar no primeiro acesso."
         }
     }
 
@@ -146,10 +181,12 @@ async def upload_students(
             if not name:
                 errors.append(f"Erro na linha {idx + 2}: Nome eh obrigatorio")
                 continue
-            
+
             if not registration:
-                registration = name.lower().replace(" ", "_")
-            
+                errors.append(f"Erro na linha {idx + 2}: Matricula eh obrigatoria")
+                continue
+
+            registration = str(registration).strip()
             email = f"{registration}@{school_domain}.com"
             temp_password = registration  # Senha é a matrícula do aluno
             
@@ -159,12 +196,11 @@ async def upload_students(
                 "password": temp_password,
                 "email_confirm": True
             })
-            
+
             if not auth.user:
                 errors.append(f"Erro na linha {idx + 2}: Falha ao criar usuario no Supabase")
                 continue
-            
-            # Criar registro de aluno
+
             supabase.table("students").insert({
                 "school_id": user["school_id"],
                 "class_id": class_id,
@@ -174,13 +210,13 @@ async def upload_students(
                 "email": email,
                 "registration_number": registration
             }).execute()
-            
+
             credentials_list.append({
                 "name": name,
                 "email": email,
                 "temp_password": temp_password
             })
-            
+
             count += 1
         except Exception as e:
             errors.append(f"Erro na linha {idx + 2}: {str(e)}")

@@ -65,7 +65,7 @@ def create_class(data: ClassCreate, user=Depends(get_current_user)):
         new_class = supabase.table("classes").insert({
             "school_id": user["school_id"],
             "name": str(data.name).strip(),
-            "year": year_str
+            "year_level": int(data.year)
         }).execute()
 
         if not new_class.data:
@@ -118,7 +118,7 @@ def update_class(class_id: str = None, data: ClassCreate = None, user=Depends(ge
         result = supabase.table("classes") \
             .update({
                 "name": data.name.strip(),
-                "year": data.year.strip()
+                "year_level": int(data.year)
             }) \
             .eq("id", class_id) \
             .execute()
