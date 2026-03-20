@@ -151,7 +151,7 @@ async def upload_students(
                 registration = name.lower().replace(" ", "_")
             
             email = f"{registration}@{school_domain}.com"
-            temp_password = generate_temp_password()
+            temp_password = registration  # Senha é a matrícula do aluno
             
             # Criar usuario no Supabase Auth
             auth = supabase.auth.admin.create_user({

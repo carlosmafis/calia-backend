@@ -264,7 +264,7 @@ async def upload_teachers(
                 errors.append(f"Erro na linha {idx + 2}: Nome Completo e Email são obrigatórios")
                 continue
             
-            temp_password = generate_temp_password()
+            temp_password = "12345678"  # Senha padrão para professores
             
             # Criar usuário no Supabase Auth
             auth = supabase.auth.admin.create_user({

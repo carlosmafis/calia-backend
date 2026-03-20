@@ -1,8 +1,11 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import requests
 import os
+import io
+import pandas as pd
 
 from core.config import supabase
 from core.auth import get_current_user
@@ -194,6 +197,66 @@ def update_profile(data: ProfileUpdateRequest, user=Depends(get_current_user)):
 # ==========================
 # HEALTH CHECK
 # ==========================
+
+# ==========================
+# ENDPOINTS PARA DOWNLOAD DE MODELOS
+# ==========================
+
+@app.get("/templates/teachers")
+def download_teachers_template(user=Depends(get_current_user)):
+    """
+    Retorna um arquivo CSV com o modelo para importar professores em lote.
+    Colunas: Nome Completo, Email
+    """
+    if user["role"] not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    
+    # Criar DataFrame com exemplo
+    data = {
+        "Nome Completo": ["João Silva", "Maria Santos"],
+        "Email": ["joao.silva@email.com", "maria.santos@email.com"]
+    }
+    df = pd.DataFrame(data)
+    
+    # Converter para CSV em memória
+    output = io.StringIO()
+    df.to_csv(output, index=False, encoding="utf-8")
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=modelo_professores.csv"}
+    )
+
+
+@app.get("/templates/students")
+def download_students_template(user=Depends(get_current_user)):
+    """
+    Retorna um arquivo CSV com o modelo para importar alunos em lote.
+    Colunas: Nome, Matricula
+    """
+    if user["role"] not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    
+    # Criar DataFrame com exemplo
+    data = {
+        "Nome": ["Ana Silva", "Bruno Costa"],
+        "Matricula": ["2024001", "2024002"]
+    }
+    df = pd.DataFrame(data)
+    
+    # Converter para CSV em memória
+    output = io.StringIO()
+    df.to_csv(output, index=False, encoding="utf-8")
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=modelo_alunos.csv"}
+    )
+
 
 @app.get("/")
 def root():
