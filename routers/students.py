@@ -112,10 +112,20 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
     temp_password = registration
 
     auth_result = create_supabase_user(email, temp_password)
-
+    
+    # ✅ PRIMEIRO valida
     if not auth_result["success"]:
         raise HTTPException(status_code=400, detail=f"Erro ao criar usuario: {auth_result['error']}")
-
+    
+    # ✅ AGORA usa com segurança
+    supabase.table("profiles").insert({
+        "id": auth_result["user_id"],
+        "school_id": user["school_id"],
+        "role": "student",
+        "full_name": data.name,
+        "email": email
+    }).execute()
+    
     student = supabase.table("students").insert({
         "school_id": user["school_id"],
         "class_id": data.class_id,
