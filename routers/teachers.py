@@ -22,6 +22,11 @@ class TeacherCreate(BaseModel):
     class_ids: List[str] = []
 
 
+class TeacherUpdate(BaseModel):
+    subject_ids: List[str] = []
+    class_ids: List[str] = []
+
+
 def generate_temp_password(length: int = 12) -> str:
     """Gera uma senha temporária aleatória."""
     characters = string.ascii_letters + string.digits + "!@#$%"
@@ -163,18 +168,12 @@ def create_teacher(data: TeacherCreate, user=Depends(get_current_user)):
 @router.put("/{teacher_id}")
 def update_teacher(
     teacher_id: str,
-    data: TeacherCreate,
+    data: TeacherUpdate,
     user=Depends(get_current_user)
 ):
 
     if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403)
-
-    # Atualizar nome
-    supabase.table("profiles") \
-        .update({"full_name": data.full_name}) \
-        .eq("id", teacher_id) \
-        .execute()
 
     # Remover disciplinas antigas
     supabase.table("teacher_subjects") \
