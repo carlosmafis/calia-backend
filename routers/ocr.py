@@ -72,7 +72,7 @@ async def correct_exam(
 class ConfirmCorrection(BaseModel):
     assessment_id: str
     student_id: str
-    answers: dict
+    answers: dict  # Pode ser dict ou array, será convertido
 
 
 @router.post("/confirm")
@@ -81,9 +81,14 @@ def confirm_correction(
     user=Depends(get_current_user)
 ):
 
+    # Converter answers de array para dict se necessário
+    answers = data.answers
+    if isinstance(answers, list):
+        answers = {str(i): v for i, v in enumerate(answers)}
+    
     score = calculate_score(
         data.assessment_id,
-        data.answers
+        answers
     )
 
     # Verificar se ja existe submissao
@@ -98,7 +103,7 @@ def confirm_correction(
         "assessment_id": data.assessment_id,
         "student_id": data.student_id,
         "uploaded_by": user["id"],
-        "extracted_answers": data.answers,
+        "extracted_answers": answers,
         "score": score
     }
     
