@@ -155,8 +155,8 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
 
 @router.post("/upload")
 async def upload_students(
-    class_id: str,
     file: UploadFile = File(...),
+    class_id: str = Form(...),
     user=Depends(get_current_user)
 ):
 
