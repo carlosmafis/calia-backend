@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 import requests
 import os
@@ -262,8 +262,8 @@ def download_teachers_template(user=Depends(get_current_user)):
     wb.save(output)
     output.seek(0)
     
-    return StreamingResponse(
-        iter([output.getvalue()]),
+    return Response(
+        content=output.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=modelo_professores.xlsx"}
     )
@@ -329,8 +329,8 @@ def download_students_template(user=Depends(get_current_user)):
     wb.save(output)
     output.seek(0)
     
-    return StreamingResponse(
-        iter([output.getvalue()]),
+    return Response(
+        content=output.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=modelo_alunos.xlsx"}
     )
