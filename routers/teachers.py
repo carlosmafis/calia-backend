@@ -246,9 +246,14 @@ async def upload_teachers(
         raise HTTPException(status_code=403)
 
     try:
-        df = pd.read_csv(file.file)
+        # Tentar ler como Excel primeiro, depois CSV
+        try:
+            df = pd.read_excel(file.file)
+        except:
+            file.file.seek(0)
+            df = pd.read_csv(file.file)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erro ao ler CSV: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Erro ao ler arquivo: {str(e)}")
 
     count = 0
     errors = []

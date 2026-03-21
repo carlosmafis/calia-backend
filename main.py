@@ -205,56 +205,134 @@ def update_profile(data: ProfileUpdateRequest, user=Depends(get_current_user)):
 @app.get("/templates/teachers")
 def download_teachers_template(user=Depends(get_current_user)):
     """
-    Retorna um arquivo CSV com o modelo para importar professores em lote.
+    Retorna um arquivo Excel com o modelo para importar professores em lote.
     Colunas: Nome Completo, Email
     """
     if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Sem permissão")
     
-    # Criar DataFrame com exemplo
-    data = {
-        "Nome Completo": ["João Silva", "Maria Santos"],
-        "Email": ["joao.silva@email.com", "maria.santos@email.com"]
-    }
-    df = pd.DataFrame(data)
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     
-    # Converter para CSV em memória
-    output = io.StringIO()
-    df.to_csv(output, index=False, encoding="utf-8")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Professores"
+    
+    # Cabeçalho
+    headers = ["Nome Completo", "Email"]
+    ws.append(headers)
+    
+    # Formatação do cabeçalho
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin")
+    )
+    
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+    
+    # Adicionar exemplos
+    examples = [
+        ["João Silva", "joao.silva@email.com"],
+        ["Maria Santos", "maria.santos@email.com"]
+    ]
+    
+    for row in examples:
+        ws.append(row)
+    
+    # Formatação das linhas de exemplo
+    for row in ws.iter_rows(min_row=2, max_row=len(examples)+1, min_col=1, max_col=2):
+        for cell in row:
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+    
+    # Ajustar largura das colunas
+    ws.column_dimensions["A"].width = 25
+    ws.column_dimensions["B"].width = 30
+    
+    # Converter para bytes
+    output = io.BytesIO()
+    wb.save(output)
     output.seek(0)
     
     return StreamingResponse(
         iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=modelo_professores.csv"}
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=modelo_professores.xlsx"}
     )
 
 
 @app.get("/templates/students")
 def download_students_template(user=Depends(get_current_user)):
     """
-    Retorna um arquivo CSV com o modelo para importar alunos em lote.
+    Retorna um arquivo Excel com o modelo para importar alunos em lote.
     Colunas: Nome, Matricula
     """
     if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Sem permissão")
     
-    # Criar DataFrame com exemplo
-    data = {
-        "Nome": ["Ana Silva", "Bruno Costa"],
-        "Matricula": ["2024001", "2024002"]
-    }
-    df = pd.DataFrame(data)
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     
-    # Converter para CSV em memória
-    output = io.StringIO()
-    df.to_csv(output, index=False, encoding="utf-8")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Alunos"
+    
+    # Cabeçalho
+    headers = ["Nome", "Matricula"]
+    ws.append(headers)
+    
+    # Formatação do cabeçalho
+    header_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin")
+    )
+    
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+    
+    # Adicionar exemplos
+    examples = [
+        ["Ana Silva", "2024001"],
+        ["Bruno Costa", "2024002"]
+    ]
+    
+    for row in examples:
+        ws.append(row)
+    
+    # Formatação das linhas de exemplo
+    for row in ws.iter_rows(min_row=2, max_row=len(examples)+1, min_col=1, max_col=2):
+        for cell in row:
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+    
+    # Ajustar largura das colunas
+    ws.column_dimensions["A"].width = 25
+    ws.column_dimensions["B"].width = 20
+    
+    # Converter para bytes
+    output = io.BytesIO()
+    wb.save(output)
     output.seek(0)
     
     return StreamingResponse(
         iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=modelo_alunos.csv"}
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=modelo_alunos.xlsx"}
     )
 
 
