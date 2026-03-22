@@ -175,10 +175,40 @@ def get_assessment_results(assessment_id: str, class_id: str = None, user=Depend
                 }
                 results.append(result)
         
-        return {"results": results}
+        return results
     except Exception as e:
         print(f"Erro ao buscar resultados: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao buscar resultados: {str(e)}")
+
+
+@router.get("/{assessment_id}/submissions")
+def get_assessment_submissions(assessment_id: str, user=Depends(get_current_user)):
+    """Endpoint alternativo para compatibilidade com frontend"""
+    try:
+        query = supabase.table("student_submissions") \
+            .select("id, assessment_id, student_id, score, extracted_answers, created_at, students(id, name, registration_number)") \
+            .eq("assessment_id", assessment_id)
+        
+        submissions = query.execute()
+        
+        results = []
+        if submissions.data:
+            for sub in submissions.data:
+                result = {
+                    "id": sub.get("id"),
+                    "assessment_id": sub.get("assessment_id"),
+                    "student_id": sub.get("student_id"),
+                    "student_name": sub.get("students", {}).get("name") if isinstance(sub.get("students"), dict) else "Aluno",
+                    "score": sub.get("score"),
+                    "answers": sub.get("extracted_answers"),
+                    "created_at": sub.get("created_at")
+                }
+                results.append(result)
+        
+        return results
+    except Exception as e:
+        print(f"Erro ao buscar submissões: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar submissões: {str(e)}")
 
 
 @router.get("/{assessment_id}/results/")
