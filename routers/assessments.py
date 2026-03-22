@@ -192,25 +192,41 @@ def get_assessment_submissions(assessment_id: str, user=Depends(get_current_user
     """Endpoint alternativo para compatibilidade com frontend"""
     try:
         # Buscar submissões com informações do aluno e avaliação
-        query = supabase.table("student_submissions") \
-            .select("id, assessment_id, student_id, score, extracted_answers, created_at, students(id, name, registration_number), assessments(class_id)") \
-            .eq("assessment_id", assessment_id)
-        
-        submissions = query.execute()
+        # Primeiro tenta com JOIN, se falhar retorna sem JOIN
+        try:
+            query = supabase.table("student_submissions") \
+                .select("id, assessment_id, student_id, score, extracted_answers, created_at, students(id, name, registration_number), assessments(class_id)") \
+                .eq("assessment_id", assessment_id)
+            
+            submissions = query.execute()
+        except:
+            # Se o JOIN falhar, busca sem JOIN
+            query = supabase.table("student_submissions") \
+                .select("id, assessment_id, student_id, score, extracted_answers, created_at, class_id") \
+                .eq("assessment_id", assessment_id)
+            
+            submissions = query.execute()
         
         results = []
         if submissions.data:
             for sub in submissions.data:
-                # Buscar class_id da avaliação se não estiver na submissão
+                # Tentar buscar nome do aluno
+                student_name = "Aluno"
+                if isinstance(sub.get("students"), dict):
+                    student_name = sub.get("students", {}).get("name", "Aluno")
+                
+                # Buscar class_id da avaliação
                 class_id = None
                 if isinstance(sub.get("assessments"), dict):
                     class_id = sub.get("assessments", {}).get("class_id")
+                elif sub.get("class_id"):
+                    class_id = sub.get("class_id")
                 
                 result = {
                     "id": sub.get("id"),
                     "assessment_id": sub.get("assessment_id"),
                     "student_id": sub.get("student_id"),
-                    "student_name": sub.get("students", {}).get("name") if isinstance(sub.get("students"), dict) else "Aluno",
+                    "student_name": student_name,
                     "score": sub.get("score"),
                     "answers": sub.get("extracted_answers"),
                     "created_at": sub.get("created_at"),
@@ -218,6 +234,7 @@ def get_assessment_submissions(assessment_id: str, user=Depends(get_current_user
                 }
                 results.append(result)
         
+        print(f"Retornando {len(results)} submissões para avaliação {assessment_id}")
         return results
     except Exception as e:
         print(f"Erro ao buscar submissões: {str(e)}")
