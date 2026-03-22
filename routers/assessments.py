@@ -234,3 +234,129 @@ def get_assessment_results_slash(assessment_id: str, class_id: str = None, user=
 def get_assessment_submissions_slash(assessment_id: str, user=Depends(get_current_user)):
     """Rota alternativa com barra final"""
     return get_assessment_submissions(assessment_id, user)
+
+
+# ==========================
+# EDITAR AVALIAÇÃO
+# ==========================
+
+class AssessmentUpdate(BaseModel):
+    title: str = None
+    questions: List[QuestionItem] = None
+
+
+@router.put("/{assessment_id}")
+def update_assessment(assessment_id: str, data: AssessmentUpdate, user=Depends(get_current_user)):
+    """Editar avaliação (título e/ou questões)"""
+    
+    logger.info(f"PUT /assessments/{assessment_id} - User: {user.get('email')}")
+    
+    try:
+        # Buscar avaliação
+        assessment = supabase.table("assessments") \
+            .select("*") \
+            .eq("id", assessment_id) \
+            .single() \
+            .execute()
+        
+        if not assessment.data:
+            raise HTTPException(status_code=404, detail="Avaliação não encontrada")
+        
+        # Verificar permissão (apenas criador ou admin)
+        if user["role"] not in ("admin", "super_admin") and assessment.data["created_by"] != user["id"]:
+            raise HTTPException(status_code=403, detail="Sem permissão para editar esta avaliação")
+        
+        # Atualizar título se fornecido
+        if data.title:
+            supabase.table("assessments") \
+                .update({"title": data.title.strip()}) \
+                .eq("id", assessment_id) \
+                .execute()
+        
+        # Atualizar questões se fornecidas
+        if data.questions:
+            # Deletar questões antigas
+            supabase.table("assessment_questions") \
+                .delete() \
+                .eq("assessment_id", assessment_id) \
+                .execute()
+            
+            # Inserir novas questões
+            rows = []
+            for q in data.questions:
+                rows.append({
+                    "assessment_id": assessment_id,
+                    "question_number": q.question_number,
+                    "correct_answer": q.correct_answer,
+                    "weight": q.weight
+                })
+            
+            if rows:
+                supabase.table("assessment_questions").insert(rows).execute()
+            
+            # Atualizar total de questões
+            supabase.table("assessments") \
+                .update({"total_questions": len(data.questions)}) \
+                .eq("id", assessment_id) \
+                .execute()
+        
+        logger.info(f"Assessment updated: {assessment_id}")
+        return {"message": "Avaliação atualizada com sucesso"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating assessment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar avaliação: {str(e)}")
+
+
+# ==========================
+# DELETAR AVALIAÇÃO
+# ==========================
+
+@router.delete("/{assessment_id}")
+def delete_assessment(assessment_id: str, user=Depends(get_current_user)):
+    """Deletar avaliação"""
+    
+    logger.info(f"DELETE /assessments/{assessment_id} - User: {user.get('email')}")
+    
+    try:
+        # Buscar avaliação
+        assessment = supabase.table("assessments") \
+            .select("*") \
+            .eq("id", assessment_id) \
+            .single() \
+            .execute()
+        
+        if not assessment.data:
+            raise HTTPException(status_code=404, detail="Avaliação não encontrada")
+        
+        # Verificar permissão (apenas criador ou admin)
+        if user["role"] not in ("admin", "super_admin") and assessment.data["created_by"] != user["id"]:
+            raise HTTPException(status_code=403, detail="Sem permissão para deletar esta avaliação")
+        
+        # Deletar questões
+        supabase.table("assessment_questions") \
+            .delete() \
+            .eq("assessment_id", assessment_id) \
+            .execute()
+        
+        # Deletar submissões
+        supabase.table("student_submissions") \
+            .delete() \
+            .eq("assessment_id", assessment_id) \
+            .execute()
+        
+        # Deletar avaliação
+        supabase.table("assessments") \
+            .delete() \
+            .eq("id", assessment_id) \
+            .execute()
+        
+        logger.info(f"Assessment deleted: {assessment_id}")
+        return {"message": "Avaliação deletada com sucesso"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting assessment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar avaliação: {str(e)}")
+
