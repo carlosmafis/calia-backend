@@ -155,7 +155,7 @@ def get_assessment_results(assessment_id: str, class_id: str = None, user=Depend
 
     try:
         query = supabase.table("student_submissions") \
-            .select("id, assessment_id, student_id, score, extracted_answers, created_at, students(id, name, registration_number)") \
+            .select("id, assessment_id, student_id, score, extracted_answers, created_at, students(id, name, registration_number), assessments(class_id)") \
             .eq("assessment_id", assessment_id)
         
         submissions = query.execute()
@@ -164,6 +164,11 @@ def get_assessment_results(assessment_id: str, class_id: str = None, user=Depend
         results = []
         if submissions.data:
             for sub in submissions.data:
+                # Buscar class_id da avaliação
+                sub_class_id = None
+                if isinstance(sub.get("assessments"), dict):
+                    sub_class_id = sub.get("assessments", {}).get("class_id")
+                
                 result = {
                     "id": sub.get("id"),
                     "assessment_id": sub.get("assessment_id"),
@@ -171,7 +176,8 @@ def get_assessment_results(assessment_id: str, class_id: str = None, user=Depend
                     "student_name": sub.get("students", {}).get("name") if isinstance(sub.get("students"), dict) else "Aluno",
                     "score": sub.get("score"),
                     "answers": sub.get("extracted_answers"),
-                    "created_at": sub.get("created_at")
+                    "created_at": sub.get("created_at"),
+                    "class_id": sub_class_id
                 }
                 results.append(result)
         
@@ -185,8 +191,9 @@ def get_assessment_results(assessment_id: str, class_id: str = None, user=Depend
 def get_assessment_submissions(assessment_id: str, user=Depends(get_current_user)):
     """Endpoint alternativo para compatibilidade com frontend"""
     try:
+        # Buscar submissões com informações do aluno e avaliação
         query = supabase.table("student_submissions") \
-            .select("id, assessment_id, student_id, score, extracted_answers, created_at, students(id, name, registration_number)") \
+            .select("id, assessment_id, student_id, score, extracted_answers, created_at, students(id, name, registration_number), assessments(class_id)") \
             .eq("assessment_id", assessment_id)
         
         submissions = query.execute()
@@ -194,6 +201,11 @@ def get_assessment_submissions(assessment_id: str, user=Depends(get_current_user
         results = []
         if submissions.data:
             for sub in submissions.data:
+                # Buscar class_id da avaliação se não estiver na submissão
+                class_id = None
+                if isinstance(sub.get("assessments"), dict):
+                    class_id = sub.get("assessments", {}).get("class_id")
+                
                 result = {
                     "id": sub.get("id"),
                     "assessment_id": sub.get("assessment_id"),
@@ -201,7 +213,8 @@ def get_assessment_submissions(assessment_id: str, user=Depends(get_current_user
                     "student_name": sub.get("students", {}).get("name") if isinstance(sub.get("students"), dict) else "Aluno",
                     "score": sub.get("score"),
                     "answers": sub.get("extracted_answers"),
-                    "created_at": sub.get("created_at")
+                    "created_at": sub.get("created_at"),
+                    "class_id": class_id
                 }
                 results.append(result)
         
@@ -215,3 +228,9 @@ def get_assessment_submissions(assessment_id: str, user=Depends(get_current_user
 def get_assessment_results_slash(assessment_id: str, class_id: str = None, user=Depends(get_current_user)):
     """Rota alternativa com barra final"""
     return get_assessment_results(assessment_id, class_id, user)
+
+
+@router.get("/{assessment_id}/submissions/")
+def get_assessment_submissions_slash(assessment_id: str, user=Depends(get_current_user)):
+    """Rota alternativa com barra final"""
+    return get_assessment_submissions(assessment_id, user)
