@@ -18,6 +18,24 @@ class PasswordChangeRequest(BaseModel):
 
 
 # ==========================
+# ENDPOINT: /me (Get current user profile)
+# ==========================
+
+@router.get("/me")
+def get_current_user_profile(user=Depends(get_current_user)):
+    """
+    Retorna o perfil do usuario logado.
+    """
+    return {
+        "id": user.get("id"),
+        "email": user.get("email"),
+        "name": user.get("name") or user.get("full_name"),
+        "role": user.get("role"),
+        "school_id": user.get("school_id"),
+    }
+
+
+# ==========================
 # ENDPOINT: /me/change-password
 # ==========================
 
