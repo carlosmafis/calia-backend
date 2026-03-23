@@ -26,6 +26,7 @@ class AssessmentCreate(BaseModel):
     subject_id: str
     title: str
     questions: List[QuestionItem]
+    bimestre: int = 1  # 1, 2, 3 ou 4
 
 
 # ==========================
@@ -124,7 +125,8 @@ def create_assessment_full(data: AssessmentCreate, user=Depends(get_current_user
             "subject_id": data.subject_id,
             "created_by": user["id"],
             "title": data.title.strip(),
-            "total_questions": len(data.questions)
+            "total_questions": len(data.questions),
+            "bimestre": data.bimestre
         }).execute().data[0]
 
         rows = []
@@ -260,6 +262,7 @@ def get_assessment_submissions_slash(assessment_id: str, user=Depends(get_curren
 class AssessmentUpdate(BaseModel):
     title: str = None
     questions: List[QuestionItem] = None
+    bimestre: int = None  # 1, 2, 3 ou 4
 
 
 @router.put("/{assessment_id}")
@@ -283,10 +286,18 @@ def update_assessment(assessment_id: str, data: AssessmentUpdate, user=Depends(g
         if user["role"] not in ("admin", "super_admin") and assessment.data["created_by"] != user["id"]:
             raise HTTPException(status_code=403, detail="Sem permissão para editar esta avaliação")
         
-        # Atualizar título se fornecido
+        # Atualizar título e/ou bimestre se fornecidos
+        update_data = {}
         if data.title:
+            update_data["title"] = data.title.strip()
+        if data.bimestre is not None:
+            if data.bimestre not in (1, 2, 3, 4):
+                raise HTTPException(status_code=400, detail="Bimestre deve ser 1, 2, 3 ou 4")
+            update_data["bimestre"] = data.bimestre
+        
+        if update_data:
             supabase.table("assessments") \
-                .update({"title": data.title.strip()}) \
+                .update(update_data) \
                 .eq("id", assessment_id) \
                 .execute()
         

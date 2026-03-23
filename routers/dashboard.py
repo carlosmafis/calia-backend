@@ -11,10 +11,20 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/student-progress/{student_id}")
 def student_progress(student_id: str, user=Depends(get_current_user)):
+    # Validar se o aluno pertence à mesma escola
+    student = supabase.table("students") \
+        .select("school_id") \
+        .eq("id", student_id) \
+        .single() \
+        .execute()
+    
+    if not student.data or student.data.get("school_id") != user["school_id"]:
+        raise HTTPException(status_code=403, detail="Sem permissão para acessar este aluno")
 
     data = supabase.table("student_submissions") \
         .select("score,created_at,assessment_id") \
         .eq("student_id", student_id) \
+        .eq("school_id", user["school_id"]) \
         .order("created_at") \
         .execute()
 
