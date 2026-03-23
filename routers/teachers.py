@@ -43,13 +43,34 @@ def list_teachers(user=Depends(get_current_user)):
     if user["role"] not in ("admin", "super_admin"):
         raise HTTPException(status_code=403)
 
-    data = supabase.table("profiles") \
+    # Buscar professores
+    teachers_data = supabase.table("profiles") \
         .select("*") \
         .eq("school_id", user["school_id"]) \
         .eq("role", "professor") \
         .execute()
 
-    return data.data
+    if not teachers_data.data:
+        return []
+
+    # Enriquecer com disciplinas e turmas
+    teachers = teachers_data.data
+    for teacher in teachers:
+        # Buscar disciplinas
+        subjects_data = supabase.table("teacher_subjects") \
+            .select("subjects(*)") \
+            .eq("teacher_id", teacher["id"]) \
+            .execute()
+        teacher["subjects"] = [x["subjects"] for x in subjects_data.data if x["subjects"]] if subjects_data.data else []
+
+        # Buscar turmas
+        classes_data = supabase.table("teacher_classes") \
+            .select("classes(*)") \
+            .eq("teacher_id", teacher["id"]) \
+            .execute()
+        teacher["classes"] = [x["classes"] for x in classes_data.data if x["classes"]] if classes_data.data else []
+
+    return teachers
 
 
 # ==========================
