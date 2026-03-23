@@ -107,6 +107,58 @@ def super_admin_stats(user=Depends(get_current_user)):
 
 
 # ==========================
+# RESULTADOS DO ALUNO LOGADO
+# ==========================
+
+@router.get("/student-results")
+def student_results(user=Depends(get_current_user)):
+    """Retorna apenas os resultados do aluno logado"""
+    
+    if user["role"] != "aluno":
+        raise HTTPException(status_code=403, detail="Apenas alunos podem acessar seus resultados")
+    
+    # Buscar o ID do aluno baseado no user_id
+    student = supabase.table("students") \
+        .select("id") \
+        .eq("user_id", user["id"]) \
+        .single() \
+        .execute()
+    
+    if not student.data:
+        return []
+    
+    student_id = student.data["id"]
+    
+    # Buscar submissões do aluno com informações da avaliação
+    data = supabase.table("student_submissions") \
+        .select("id, score, created_at, assessment_id, assessments(title, subject_id, subjects(name))") \
+        .eq("student_id", student_id) \
+        .eq("school_id", user["school_id"]) \
+        .order("created_at", desc=True) \
+        .execute()
+    
+    if not data.data:
+        return []
+    
+    # Formatar dados para o frontend
+    results = []
+    for submission in data.data:
+        assessment = submission.get("assessments", {})
+        subject = assessment.get("subjects", {}) if isinstance(assessment.get("subjects"), dict) else {}
+        
+        results.append({
+            "id": submission["id"],
+            "score": submission["score"],
+            "assessment_title": assessment.get("title", "Avaliação"),
+            "subject_name": subject.get("name", "") if subject else "",
+            "date": submission["created_at"],
+            "assessment_id": submission["assessment_id"]
+        })
+    
+    return results
+
+
+# ==========================
 # SUBMISSÕES RECENTES
 # ==========================
 
