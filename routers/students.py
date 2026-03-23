@@ -121,7 +121,7 @@ def create_student(data: StudentCreate, user=Depends(get_current_user)):
     supabase.table("profiles").insert({
         "id": auth_result["user_id"],
         "school_id": user["school_id"],
-        "role": "student",
+        "role": "aluno",
         "full_name": data.name,
         "email": email
     }).execute()
