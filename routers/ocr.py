@@ -44,8 +44,13 @@ async def correct_exam(
     answers = ocr_result["answers"]
     debug_image = ocr_result["debug_image"]
 
+    # 🔥 Corrige lista
     if isinstance(answers, list):
         answers = {str(i + 1): v for i, v in enumerate(answers)}
+    
+    # 🔥 Corrige dict vindo como 0–9
+    elif isinstance(answers, dict):
+        answers = {str(int(k) + 1): v for k, v in answers.items()}
 
     print("RESPOSTAS OCR:", answers)
 
