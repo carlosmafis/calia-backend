@@ -66,58 +66,87 @@ def read_answer_sheet(image_path, gabarito):
         cv2.CHAIN_APPROX_SIMPLE
     )
 
-    # Estratégia: encontrar os 4 marcadores nos cantos
-    # Dividir a imagem em 4 quadrantes e procurar por contornos em cada um
-    
+    # Estratégia 1: Procurar por contornos quadrados em cada canto
     h_img, w_img = img.shape[:2]
-    mid_x = w_img / 2
-    mid_y = h_img / 2
     
-    # Margens para procurar pelos marcadores (em % da imagem)
-    margin = 0.25  # Procurar nos primeiros 25% de cada canto
-    
-    quadrantes = {
-        'tl': (0, int(mid_x * (1 + margin)), 0, int(mid_y * (1 + margin))),  # top-left
-        'tr': (int(w_img - mid_x * (1 + margin)), w_img, 0, int(mid_y * (1 + margin))),  # top-right
-        'bl': (0, int(mid_x * (1 + margin)), int(h_img - mid_y * (1 + margin)), h_img),  # bottom-left
-        'br': (int(w_img - mid_x * (1 + margin)), w_img, int(h_img - mid_y * (1 + margin)), h_img)  # bottom-right
+    # Definir regiões de busca para cada canto (10% de cada lado)
+    corner_size = 0.15
+    regions = {
+        'tl': (0, int(w_img * corner_size), 0, int(h_img * corner_size)),
+        'tr': (int(w_img * (1 - corner_size)), w_img, 0, int(h_img * corner_size)),
+        'bl': (0, int(w_img * corner_size), int(h_img * (1 - corner_size)), h_img),
+        'br': (int(w_img * (1 - corner_size)), w_img, int(h_img * (1 - corner_size)), h_img)
     }
     
     marcadores_finais = []
     
-    for quad_name, (x1, x2, y1, y2) in quadrantes.items():
-        # Procurar contornos neste quadrante
-        candidatos_quad = []
+    for region_name, (x1, x2, y1, y2) in regions.items():
+        best_contour = None
+        best_area = 0
         
         for cnt in contours:
+            # Calcular centróide
             M = cv2.moments(cnt)
             if M["m00"] == 0:
                 continue
-                
-            cx = M["m10"] / M["m00"]
-            cy = M["m01"] / M["m00"]
             
-            # Verificar se o centróide está dentro deste quadrante
-            if x1 <= cx < x2 and y1 <= cy < y2:
-                peri = cv2.arcLength(cnt, True)
-                approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
+            
+            # Verificar se está na região
+            if not (x1 <= cx < x2 and y1 <= cy < y2):
+                continue
+            
+            # Calcular perímetro e aproximação
+            peri = cv2.arcLength(cnt, True)
+            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+            
+            # Procurar por quadriláteros (4 lados)
+            if len(approx) == 4:
+                area = cv2.contourArea(cnt)
                 
-                if len(approx) == 4:
-                    area = cv2.contourArea(cnt)
+                # Muito mais flexível: aceitar qualquer tamanho razoável
+                if 50 < area < 50000:
+                    x, y, wb, hb = cv2.boundingRect(cnt)
                     
-                    # Range mais flexível para marcadores
-                    if 100 < area < 20000:
-                        x, y, wb, hb = cv2.boundingRect(cnt)
+                    # Proporção próxima a 1 (quadrado)
+                    if wb > 0 and hb > 0:
                         proporcao = wb / float(hb)
                         
-                        if 0.5 < proporcao < 1.5:
-                            candidatos_quad.append((area, approx))
+                        if 0.4 < proporcao < 2.5:
+                            # Preferir contornos maiores
+                            if area > best_area:
+                                best_area = area
+                                best_contour = approx
         
-        # Selecionar o maior contorno deste quadrante (mais provável ser o marcador)
-        if candidatos_quad:
-            candidatos_quad.sort(key=lambda x: x[0], reverse=True)
-            marcadores_finais.append(candidatos_quad[0][1])
-
+        if best_contour is not None:
+            marcadores_finais.append(best_contour)
+    
+    # Se não encontrou 4 marcadores, tentar estratégia alternativa
+    if len(marcadores_finais) < 4:
+        # Estratégia 2: Procurar pelos 4 maiores contornos quadrados na imagem toda
+        candidatos = []
+        
+        for cnt in contours:
+            peri = cv2.arcLength(cnt, True)
+            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+            
+            if len(approx) == 4:
+                area = cv2.contourArea(cnt)
+                
+                if 50 < area < 50000:
+                    x, y, wb, hb = cv2.boundingRect(cnt)
+                    
+                    if wb > 0 and hb > 0:
+                        proporcao = wb / float(hb)
+                        
+                        if 0.4 < proporcao < 2.5:
+                            candidatos.append((area, approx))
+        
+        # Ordenar por área e pegar os 4 maiores
+        candidatos.sort(key=lambda x: x[0], reverse=True)
+        marcadores_finais = [c[1] for c in candidatos[:4]]
+    
     if len(marcadores_finais) < 4:
         raise Exception("Marcadores não detectados")
 
