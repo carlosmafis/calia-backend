@@ -28,7 +28,7 @@ async def correct_exam(
     questions = (
         supabase.table("assessment_questions")
         .select("*")
-        .eq("assessment_id", assessment_id)
+        .eq("assessment_id", data.assessment_id)
         .order("question_number")
         .execute()
         .data
@@ -57,7 +57,7 @@ async def correct_exam(
     # Buscar class_id da avaliação
     assessment = supabase.table("assessments") \
         .select("class_id") \
-        .eq("id", assessment_id) \
+        .eq("id", data.assessment_id) \
         .single() \
         .execute()
     
@@ -68,8 +68,8 @@ async def correct_exam(
     supabase.table("student_submissions").insert({
 
         "school_id": user["school_id"],
-        "assessment_id": assessment_id,
-        "student_id": student_id,
+        "assessment_id": data.assessment_id,
+        "student_id": data.student_id,
         "class_id": class_id,
         "uploaded_by": user["id"],
         "extracted_answers": answers,
@@ -90,17 +90,21 @@ class ConfirmCorrection(BaseModel):
     answers: dict  # Pode ser dict ou array, será convertido
 
 
+class MarkAbsentRequest(BaseModel):
+    assessment_id: str
+    student_id: str
+
+
 @router.post("/mark-absent")
 def mark_absent(
-    assessment_id: str = Form(...),
-    student_id: str = Form(...),
+    data: MarkAbsentRequest,
     user=Depends(get_current_user)
 ):
     """Marca um aluno como ausente na avaliação"""
     # Buscar class_id da avaliação
     assessment = supabase.table("assessments") \
         .select("class_id") \
-        .eq("id", assessment_id) \
+        .eq("id", data.assessment_id) \
         .single() \
         .execute()
     
@@ -111,14 +115,14 @@ def mark_absent(
     # Verificar se ja existe submissao
     existing = supabase.table("student_submissions") \
         .select("id") \
-        .eq("assessment_id", assessment_id) \
-        .eq("student_id", student_id) \
+        .eq("assessment_id", data.assessment_id) \
+        .eq("student_id", data.student_id) \
         .execute()
     
     submission_data = {
         "school_id": user["school_id"],
-        "assessment_id": assessment_id,
-        "student_id": student_id,
+        "assessment_id": data.assessment_id,
+        "student_id": data.student_id,
         "class_id": class_id,
         "uploaded_by": user["id"],
         "status": "ausente",
