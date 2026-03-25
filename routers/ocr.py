@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, Form
+from fastapi import APIRouter, UploadFile, File, Depends, Form, HTTPException
 from pydantic import BaseModel
 import uuid
 import shutil
@@ -28,7 +28,7 @@ async def correct_exam(
     questions = (
         supabase.table("assessment_questions")
         .select("*")
-        .eq("assessment_id", data.assessment_id)
+        .eq("assessment_id", assessment_id)
         .order("question_number")
         .execute()
         .data
@@ -57,7 +57,7 @@ async def correct_exam(
     # Buscar class_id da avaliação
     assessment = supabase.table("assessments") \
         .select("class_id") \
-        .eq("id", data.assessment_id) \
+        .eq("id", assessment_id) \
         .single() \
         .execute()
     
@@ -68,8 +68,8 @@ async def correct_exam(
     supabase.table("student_submissions").insert({
 
         "school_id": user["school_id"],
-        "assessment_id": data.assessment_id,
-        "student_id": data.student_id,
+        "assessment_id": assessment_id,
+        "student_id": student_id,
         "class_id": class_id,
         "uploaded_by": user["id"],
         "extracted_answers": answers,
@@ -82,6 +82,11 @@ async def correct_exam(
         "score": score,
         "debug_image": debug_image
     }
+
+
+class CorrectExamRequest(BaseModel):
+    assessment_id: str
+    student_id: str
 
 
 class ConfirmCorrection(BaseModel):
@@ -104,7 +109,7 @@ def mark_absent(
     # Buscar class_id da avaliação
     assessment = supabase.table("assessments") \
         .select("class_id") \
-        .eq("id", data.assessment_id) \
+        .eq("id", assessment_id) \
         .single() \
         .execute()
     
@@ -115,14 +120,14 @@ def mark_absent(
     # Verificar se ja existe submissao
     existing = supabase.table("student_submissions") \
         .select("id") \
-        .eq("assessment_id", data.assessment_id) \
-        .eq("student_id", data.student_id) \
+        .eq("assessment_id", assessment_id) \
+        .eq("student_id", student_id) \
         .execute()
     
     submission_data = {
         "school_id": user["school_id"],
-        "assessment_id": data.assessment_id,
-        "student_id": data.student_id,
+        "assessment_id": assessment_id,
+        "student_id": student_id,
         "class_id": class_id,
         "uploaded_by": user["id"],
         "status": "ausente",
@@ -163,14 +168,14 @@ def confirm_correction(
         answers = {str(int(k) + 1): v for k, v in answers.items()}
     
     score = calculate_score(
-        data.assessment_id,
+        assessment_id,
         answers
     )
 
     # Buscar class_id da avaliacao
     assessment = supabase.table("assessments") \
         .select("class_id") \
-        .eq("id", data.assessment_id) \
+        .eq("id", assessment_id) \
         .single() \
         .execute()
     
@@ -181,14 +186,14 @@ def confirm_correction(
     # Verificar se ja existe submissao
     existing = supabase.table("student_submissions") \
         .select("id") \
-        .eq("assessment_id", data.assessment_id) \
-        .eq("student_id", data.student_id) \
+        .eq("assessment_id", assessment_id) \
+        .eq("student_id", student_id) \
         .execute()
     
     submission_data = {
         "school_id": user["school_id"],
-        "assessment_id": data.assessment_id,
-        "student_id": data.student_id,
+        "assessment_id": assessment_id,
+        "student_id": student_id,
         "class_id": class_id,
         "uploaded_by": user["id"],
         "extracted_answers": answers,
