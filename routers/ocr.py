@@ -44,6 +44,9 @@ async def correct_exam(
     answers = ocr_result["answers"]
     debug_image = ocr_result["debug_image"]
 
+    if isinstance(answers, list):
+        answers = {str(i + 1): v for i, v in enumerate(answers)}
+
     print("RESPOSTAS OCR:", answers)
 
     score = calculate_score(
@@ -147,8 +150,13 @@ def confirm_correction(
 
     # Converter answers de array para dict se necessário
     answers = data.answers
+    # 🔥 Corrige lista
     if isinstance(answers, list):
-        answers = {str(i): v for i, v in enumerate(answers)}
+        answers = {str(i + 1): v for i, v in enumerate(answers)}
+    
+    # 🔥 Corrige dict vindo como 0–9
+    elif isinstance(answers, dict):
+        answers = {str(int(k) + 1): v for k, v in answers.items()}
     
     score = calculate_score(
         data.assessment_id,
