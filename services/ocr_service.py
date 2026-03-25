@@ -49,121 +49,105 @@ def read_answer_sheet(image_path, gabarito):
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    blurred = cv2.GaussianBlur(gray, (5,5),0)
-
-    thresh = cv2.adaptiveThreshold(
-        blurred,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
-        51,
-        11
-    )
-
-    contours,_ = cv2.findContours(
-        thresh,
-        cv2.RETR_LIST,
-        cv2.CHAIN_APPROX_SIMPLE
-    )
-
-    # Estratégia 1: Procurar por contornos quadrados em cada canto
+    # Usar Harris corner detection para encontrar os 4 cantos
+    corners = cv2.cornerHarris(gray, 2, 3, 0.04)
+    
+    # Normalizar e threshold
+    corners = cv2.normalize(corners, None)
+    corners = (corners * 255).astype(np.uint8)
+    
+    # Encontrar os pontos de canto
+    ret, corners_binary = cv2.threshold(corners, 127, 255, cv2.THRESH_BINARY)
+    
+    # Encontrar contornos dos cantos
+    contours, _ = cv2.findContours(corners_binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    
     h_img, w_img = img.shape[:2]
     
-    # Definir regiões de busca para cada canto (10% de cada lado)
-    corner_size = 0.15
-    regions = {
-        'tl': (0, int(w_img * corner_size), 0, int(h_img * corner_size)),
-        'tr': (int(w_img * (1 - corner_size)), w_img, 0, int(h_img * corner_size)),
-        'bl': (0, int(w_img * corner_size), int(h_img * (1 - corner_size)), h_img),
-        'br': (int(w_img * (1 - corner_size)), w_img, int(h_img * (1 - corner_size)), h_img)
+    # Definir regiões de busca para cada canto (20% de cada lado)
+    corner_regions = {
+        'tl': (0, int(w_img * 0.2), 0, int(h_img * 0.2)),
+        'tr': (int(w_img * 0.8), w_img, 0, int(h_img * 0.2)),
+        'bl': (0, int(w_img * 0.2), int(h_img * 0.8), h_img),
+        'br': (int(w_img * 0.8), w_img, int(h_img * 0.8), h_img)
     }
     
-    marcadores_finais = []
+    corner_points = {}
     
-    for region_name, (x1, x2, y1, y2) in regions.items():
-        best_contour = None
-        best_area = 0
+    for region_name, (x1, x2, y1, y2) in corner_regions.items():
+        # Procurar o ponto mais forte nesta região
+        region_corners = corners[y1:y2, x1:x2]
         
-        for cnt in contours:
-            # Calcular centróide
-            M = cv2.moments(cnt)
-            if M["m00"] == 0:
-                continue
+        if region_corners.size > 0:
+            # Encontrar o ponto com maior valor de corner
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(region_corners)
             
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
+            if max_val > 0:
+                # Converter para coordenadas globais
+                cy = max_loc[1] + y1
+                cx = max_loc[0] + x1
+                corner_points[region_name] = (cx, cy)
+    
+    # Se não encontrou todos os 4 cantos, tentar estratégia alternativa
+    if len(corner_points) < 4:
+        # Estratégia alternativa: procurar por bordas e depois por cantos
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 50, 150)
+        
+        # Dilatação para conectar bordas
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        edges = cv2.dilate(edges, kernel, iterations=2)
+        
+        # Encontrar contornos das bordas
+        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        
+        corner_points = {}
+        
+        for region_name, (x1, x2, y1, y2) in corner_regions.items():
+            best_point = None
+            best_distance = float('inf')
             
-            # Verificar se está na região
-            if not (x1 <= cx < x2 and y1 <= cy < y2):
-                continue
-            
-            # Calcular perímetro e aproximação
-            peri = cv2.arcLength(cnt, True)
-            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-            
-            # Procurar por quadriláteros (4 lados)
-            if len(approx) == 4:
-                area = cv2.contourArea(cnt)
+            for cnt in contours:
+                M = cv2.moments(cnt)
+                if M["m00"] == 0:
+                    continue
                 
-                # Muito mais flexível: aceitar qualquer tamanho razoável
-                if 50 < area < 50000:
-                    x, y, wb, hb = cv2.boundingRect(cnt)
-                    
-                    # Proporção próxima a 1 (quadrado)
-                    if wb > 0 and hb > 0:
-                        proporcao = wb / float(hb)
-                        
-                        if 0.4 < proporcao < 2.5:
-                            # Preferir contornos maiores
-                            if area > best_area:
-                                best_area = area
-                                best_contour = approx
-        
-        if best_contour is not None:
-            marcadores_finais.append(best_contour)
-    
-    # Se não encontrou 4 marcadores, tentar estratégia alternativa
-    if len(marcadores_finais) < 4:
-        # Estratégia 2: Procurar pelos 4 maiores contornos quadrados na imagem toda
-        candidatos = []
-        
-        for cnt in contours:
-            peri = cv2.arcLength(cnt, True)
-            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-            
-            if len(approx) == 4:
-                area = cv2.contourArea(cnt)
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
                 
-                if 50 < area < 50000:
-                    x, y, wb, hb = cv2.boundingRect(cnt)
+                # Verificar se está na região
+                if x1 <= cx < x2 and y1 <= cy < y2:
+                    # Calcular distância até o canto esperado
+                    if region_name == 'tl':
+                        expected = (x1, y1)
+                    elif region_name == 'tr':
+                        expected = (x2, y1)
+                    elif region_name == 'bl':
+                        expected = (x1, y2)
+                    else:  # br
+                        expected = (x2, y2)
                     
-                    if wb > 0 and hb > 0:
-                        proporcao = wb / float(hb)
-                        
-                        if 0.4 < proporcao < 2.5:
-                            candidatos.append((area, approx))
-        
-        # Ordenar por área e pegar os 4 maiores
-        candidatos.sort(key=lambda x: x[0], reverse=True)
-        marcadores_finais = [c[1] for c in candidatos[:4]]
+                    dist = np.sqrt((cx - expected[0])**2 + (cy - expected[1])**2)
+                    
+                    if dist < best_distance:
+                        best_distance = dist
+                        best_point = (cx, cy)
+            
+            if best_point:
+                corner_points[region_name] = best_point
     
-    if len(marcadores_finais) < 4:
+    if len(corner_points) < 4:
         raise Exception("Marcadores não detectados")
+    
+    # Montar array de pontos na ordem correta
+    pts = np.array([
+        corner_points['tl'],
+        corner_points['tr'],
+        corner_points['br'],
+        corner_points['bl']
+    ], dtype="float32")
 
-    pts = []
-
-    for c in marcadores_finais:
-
-        M = cv2.moments(c)
-
-        if M["m00"] != 0:
-
-            pts.append([
-                M["m10"]/M["m00"],
-                M["m01"]/M["m00"]
-            ])
-
-    rect = order_points(np.array(pts, dtype="float32"))
+    rect = order_points(pts)
 
     warped = cv2.warpPerspective(
         img,
