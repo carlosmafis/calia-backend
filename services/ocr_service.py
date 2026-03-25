@@ -66,85 +66,57 @@ def read_answer_sheet(image_path, gabarito):
         cv2.CHAIN_APPROX_SIMPLE
     )
 
-    candidatos = []
-
-    for cnt in contours:
-
-        peri = cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt,0.02*peri,True)
-
-        if len(approx) == 4:
-
-            area = cv2.contourArea(cnt)
-
-            # Ajustar range para detectar marcadores mesmo com bordas
-            if 500 < area < 30000:
-
-                x,y,wb,hb = cv2.boundingRect(cnt)
-
-                proporcao = wb/float(hb)
-
-                if 0.6 < proporcao < 1.4:
-
-                    candidatos.append(approx)
-
-    # Filtrar os 4 marcadores pelos cantos (não apenas pelo tamanho)
-    # Ordenar por posição para encontrar os 4 cantos
-    if len(candidatos) >= 4:
-        # Calcular centróides de cada candidato
-        centroides = []
-        for c in candidatos:
-            M = cv2.moments(c)
-            if M["m00"] != 0:
-                cx = M["m10"] / M["m00"]
-                cy = M["m01"] / M["m00"]
-                centroides.append((cx, cy, c))
+    # Estratégia: encontrar os 4 marcadores nos cantos
+    # Dividir a imagem em 4 quadrantes e procurar por contornos em cada um
+    
+    h_img, w_img = img.shape[:2]
+    mid_x = w_img / 2
+    mid_y = h_img / 2
+    
+    # Margens para procurar pelos marcadores (em % da imagem)
+    margin = 0.25  # Procurar nos primeiros 25% de cada canto
+    
+    quadrantes = {
+        'tl': (0, int(mid_x * (1 + margin)), 0, int(mid_y * (1 + margin))),  # top-left
+        'tr': (int(w_img - mid_x * (1 + margin)), w_img, 0, int(mid_y * (1 + margin))),  # top-right
+        'bl': (0, int(mid_x * (1 + margin)), int(h_img - mid_y * (1 + margin)), h_img),  # bottom-left
+        'br': (int(w_img - mid_x * (1 + margin)), w_img, int(h_img - mid_y * (1 + margin)), h_img)  # bottom-right
+    }
+    
+    marcadores_finais = []
+    
+    for quad_name, (x1, x2, y1, y2) in quadrantes.items():
+        # Procurar contornos neste quadrante
+        candidatos_quad = []
         
-        # Encontrar os 4 cantos: top-left, top-right, bottom-left, bottom-right
-        if len(centroides) >= 4:
-            # Separar por quadrantes
-            h_img, w_img = img.shape[:2]
-            mid_x = w_img / 2
-            mid_y = h_img / 2
+        for cnt in contours:
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+                
+            cx = M["m10"] / M["m00"]
+            cy = M["m01"] / M["m00"]
             
-            cantos = {
-                'tl': None,  # top-left
-                'tr': None,  # top-right
-                'bl': None,  # bottom-left
-                'br': None   # bottom-right
-            }
-            
-            for cx, cy, c in centroides:
-                if cx < mid_x and cy < mid_y:
-                    if cantos['tl'] is None or (cx**2 + cy**2) < (cantos['tl'][0]**2 + cantos['tl'][1]**2):
-                        cantos['tl'] = (cx, cy, c)
-                elif cx >= mid_x and cy < mid_y:
-                    if cantos['tr'] is None or ((w_img-cx)**2 + cy**2) < ((w_img-cantos['tr'][0])**2 + cantos['tr'][1]**2):
-                        cantos['tr'] = (cx, cy, c)
-                elif cx < mid_x and cy >= mid_y:
-                    if cantos['bl'] is None or (cx**2 + (h_img-cy)**2) < (cantos['bl'][0]**2 + (h_img-cantos['bl'][1])**2):
-                        cantos['bl'] = (cx, cy, c)
-                elif cx >= mid_x and cy >= mid_y:
-                    if cantos['br'] is None or ((w_img-cx)**2 + (h_img-cy)**2) < ((w_img-cantos['br'][0])**2 + (h_img-cantos['br'][1])**2):
-                        cantos['br'] = (cx, cy, c)
-            
-            # Montar lista final com os 4 cantos encontrados
-            marcadores_finais = []
-            for canto in ['tl', 'tr', 'bl', 'br']:
-                if cantos[canto] is not None:
-                    marcadores_finais.append(cantos[canto][2])
-        else:
-            marcadores_finais = sorted(
-                candidatos,
-                key=cv2.contourArea,
-                reverse=True
-            )[:4]
-    else:
-        marcadores_finais = sorted(
-            candidatos,
-            key=cv2.contourArea,
-            reverse=True
-        )[:4]
+            # Verificar se o centróide está dentro deste quadrante
+            if x1 <= cx < x2 and y1 <= cy < y2:
+                peri = cv2.arcLength(cnt, True)
+                approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+                
+                if len(approx) == 4:
+                    area = cv2.contourArea(cnt)
+                    
+                    # Range mais flexível para marcadores
+                    if 100 < area < 20000:
+                        x, y, wb, hb = cv2.boundingRect(cnt)
+                        proporcao = wb / float(hb)
+                        
+                        if 0.5 < proporcao < 1.5:
+                            candidatos_quad.append((area, approx))
+        
+        # Selecionar o maior contorno deste quadrante (mais provável ser o marcador)
+        if candidatos_quad:
+            candidatos_quad.sort(key=lambda x: x[0], reverse=True)
+            marcadores_finais.append(candidatos_quad[0][1])
 
     if len(marcadores_finais) < 4:
         raise Exception("Marcadores não detectados")
