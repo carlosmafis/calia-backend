@@ -77,21 +77,74 @@ def read_answer_sheet(image_path, gabarito):
 
             area = cv2.contourArea(cnt)
 
-            if 1000 < area < 40000:
+            # Ajustar range para detectar marcadores mesmo com bordas
+            if 500 < area < 30000:
 
                 x,y,wb,hb = cv2.boundingRect(cnt)
 
                 proporcao = wb/float(hb)
 
-                if 0.7 < proporcao < 1.3:
+                if 0.6 < proporcao < 1.4:
 
                     candidatos.append(approx)
 
-    marcadores_finais = sorted(
-        candidatos,
-        key=cv2.contourArea,
-        reverse=True
-    )[:4]
+    # Filtrar os 4 marcadores pelos cantos (não apenas pelo tamanho)
+    # Ordenar por posição para encontrar os 4 cantos
+    if len(candidatos) >= 4:
+        # Calcular centróides de cada candidato
+        centroides = []
+        for c in candidatos:
+            M = cv2.moments(c)
+            if M["m00"] != 0:
+                cx = M["m10"] / M["m00"]
+                cy = M["m01"] / M["m00"]
+                centroides.append((cx, cy, c))
+        
+        # Encontrar os 4 cantos: top-left, top-right, bottom-left, bottom-right
+        if len(centroides) >= 4:
+            # Separar por quadrantes
+            h_img, w_img = img.shape[:2]
+            mid_x = w_img / 2
+            mid_y = h_img / 2
+            
+            cantos = {
+                'tl': None,  # top-left
+                'tr': None,  # top-right
+                'bl': None,  # bottom-left
+                'br': None   # bottom-right
+            }
+            
+            for cx, cy, c in centroides:
+                if cx < mid_x and cy < mid_y:
+                    if cantos['tl'] is None or (cx**2 + cy**2) < (cantos['tl'][0]**2 + cantos['tl'][1]**2):
+                        cantos['tl'] = (cx, cy, c)
+                elif cx >= mid_x and cy < mid_y:
+                    if cantos['tr'] is None or ((w_img-cx)**2 + cy**2) < ((w_img-cantos['tr'][0])**2 + cantos['tr'][1]**2):
+                        cantos['tr'] = (cx, cy, c)
+                elif cx < mid_x and cy >= mid_y:
+                    if cantos['bl'] is None or (cx**2 + (h_img-cy)**2) < (cantos['bl'][0]**2 + (h_img-cantos['bl'][1])**2):
+                        cantos['bl'] = (cx, cy, c)
+                elif cx >= mid_x and cy >= mid_y:
+                    if cantos['br'] is None or ((w_img-cx)**2 + (h_img-cy)**2) < ((w_img-cantos['br'][0])**2 + (h_img-cantos['br'][1])**2):
+                        cantos['br'] = (cx, cy, c)
+            
+            # Montar lista final com os 4 cantos encontrados
+            marcadores_finais = []
+            for canto in ['tl', 'tr', 'bl', 'br']:
+                if cantos[canto] is not None:
+                    marcadores_finais.append(cantos[canto][2])
+        else:
+            marcadores_finais = sorted(
+                candidatos,
+                key=cv2.contourArea,
+                reverse=True
+            )[:4]
+    else:
+        marcadores_finais = sorted(
+            candidatos,
+            key=cv2.contourArea,
+            reverse=True
+        )[:4]
 
     if len(marcadores_finais) < 4:
         raise Exception("Marcadores não detectados")
