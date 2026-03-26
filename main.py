@@ -22,6 +22,7 @@ from routers import users
 from routers import admin_dashboard
 from routers import teacher_dashboard
 from routers import reports
+from routers import alerts
 from routers.subjects import router as subjects_router
 
 app = FastAPI(title="Calia Digital API", version="2.0.0")
@@ -62,6 +63,7 @@ app.include_router(dashboard.router)
 app.include_router(admin_dashboard.router)
 app.include_router(teacher_dashboard.router)
 app.include_router(reports.router)
+app.include_router(alerts.router)
 
 
 # ==========================
