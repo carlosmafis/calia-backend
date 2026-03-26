@@ -51,7 +51,6 @@ def read_answer_sheet(image_path, gabarito):
 
     blurred = cv2.GaussianBlur(gray, (5,5),0)
 
-    # Threshold adaptativo para detectar áreas escuras (marcadores)
     thresh = cv2.adaptiveThreshold(
         blurred,
         255,
@@ -67,77 +66,50 @@ def read_answer_sheet(image_path, gabarito):
         cv2.CHAIN_APPROX_SIMPLE
     )
 
-    # Procurar por quadrados pretos (marcadores)
-    quadrados = []
-    
+    candidatos = []
+
     for cnt in contours:
+
         peri = cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-        
-        # Deve ser um quadrilátero (4 lados)
+        approx = cv2.approxPolyDP(cnt,0.02*peri,True)
+
         if len(approx) == 4:
+
             area = cv2.contourArea(cnt)
-            
-            # Área razoável para um marcador (não muito pequeno, não muito grande)
-            if 500 < area < 15000:
-                x, y, w_rect, h_rect = cv2.boundingRect(cnt)
-                
-                # Deve ser aproximadamente quadrado
-                if w_rect > 0 and h_rect > 0:
-                    aspect_ratio = float(w_rect) / h_rect
-                    
-                    # Proporção próxima a 1 (quadrado)
-                    if 0.7 < aspect_ratio < 1.3:
-                        # Verificar se é preto (baixa intensidade média)
-                        mask = np.zeros(gray.shape, dtype=np.uint8)
-                        cv2.drawContours(mask, [cnt], 0, 255, -1)
-                        mean_intensity = cv2.mean(gray, mask=mask)[0]
-                        
-                        # Se é escuro (preto), é um marcador
-                        if mean_intensity < 100:
-                            quadrados.append({
-                                'contour': approx,
-                                'area': area,
-                                'centroid': (int(x + w_rect/2), int(y + h_rect/2))
-                            })
-    
-    # Se não encontrou quadrados, tentar com critérios mais flexíveis
-    if len(quadrados) < 4:
-        quadrados = []
-        
-        for cnt in contours:
-            peri = cv2.arcLength(cnt, True)
-            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-            
-            if len(approx) == 4:
-                area = cv2.contourArea(cnt)
-                
-                # Critérios muito mais flexíveis
-                if 200 < area < 30000:
-                    x, y, w_rect, h_rect = cv2.boundingRect(cnt)
-                    
-                    if w_rect > 0 and h_rect > 0:
-                        aspect_ratio = float(w_rect) / h_rect
-                        
-                        # Mais flexível
-                        if 0.5 < aspect_ratio < 2.0:
-                            quadrados.append({
-                                'contour': approx,
-                                'area': area,
-                                'centroid': (int(x + w_rect/2), int(y + h_rect/2))
-                            })
-    
-    if len(quadrados) < 4:
+
+            if 1000 < area < 40000:
+
+                x,y,wb,hb = cv2.boundingRect(cnt)
+
+                proporcao = wb/float(hb)
+
+                if 0.7 < proporcao < 1.3:
+
+                    candidatos.append(approx)
+
+    marcadores_finais = sorted(
+        candidatos,
+        key=cv2.contourArea,
+        reverse=True
+    )[:4]
+
+    if len(marcadores_finais) < 4:
         raise Exception("Marcadores não detectados")
-    
-    # Ordenar por área e pegar os 4 maiores
-    quadrados.sort(key=lambda x: x['area'], reverse=True)
-    top_4 = quadrados[:4]
-    
-    # Ordenar os 4 maiores pelos cantos (tl, tr, br, bl)
-    pts = np.array([q['centroid'] for q in top_4], dtype="float32")
-    
-    rect = order_points(pts)
+
+    pts = []
+
+    for c in marcadores_finais:
+
+        M = cv2.moments(c)
+
+        if M["m00"] != 0:
+
+            pts.append([
+                M["m10"]/M["m00"],
+                M["m01"]/M["m00"]
+            ])
+
+    rect = order_points(np.array(pts, dtype="float32"))
 
     warped = cv2.warpPerspective(
         img,
