@@ -90,6 +90,14 @@ def get_assessment(assessment_id: str, user=Depends(get_current_user)):
 
     result = assessment.data
     result["questions"] = questions.data or []
+    
+    # Montar gabarito (answer_key) a partir das questões
+    answer_key = {}
+    if questions.data:
+        for q in questions.data:
+            answer_key[str(q["question_number"])] = q["correct_answer"]
+    
+    result["answer_key"] = answer_key
 
     return result
 
