@@ -151,6 +151,26 @@ def mark_absent(
     }
 
 
+@router.post("/remove-absent")
+def remove_absent(
+    data: MarkAbsentRequest,
+    user=Depends(get_current_user)
+):
+    """Remove a marcação de ausência de um aluno"""
+    # Deletar a submissão de ausência
+    supabase.table("student_submissions") \
+        .delete() \
+        .eq("assessment_id", data.assessment_id) \
+        .eq("student_id", data.student_id) \
+        .eq("status", "ausente") \
+        .execute()
+
+    return {
+        "status": "removed",
+        "message": "Ausência removida"
+    }
+
+
 @router.post("/confirm")
 def confirm_correction(
     data: ConfirmCorrection,
