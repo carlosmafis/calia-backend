@@ -54,33 +54,12 @@ async def correct_exam(
         answers
     )
 
-    # Buscar class_id da avaliação
-    assessment = supabase.table("assessments") \
-        .select("class_id") \
-        .eq("id", assessment_id) \
-        .single() \
-        .execute()
-    
-    class_id = assessment.data.get("class_id") if assessment.data else None
-    if not class_id:
-        raise HTTPException(status_code=400, detail="Avaliação não encontrada ou sem turma")
-
-    supabase.table("student_submissions").insert({
-
-        "school_id": user["school_id"],
-        "assessment_id": assessment_id,
-        "student_id": student_id,
-        "class_id": class_id,
-        "uploaded_by": user["id"],
-        "extracted_answers": answers,
-        "score": score
-
-    }).execute()
-
     return {
         "answers": answers,
         "score": score,
-        "debug_image": debug_image
+        "debug_image": debug_image,
+        "assessment_id": assessment_id,
+        "student_id": student_id
     }
 
 
