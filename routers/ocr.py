@@ -42,6 +42,7 @@ async def correct_exam(
     )
 
     answers = ocr_result["answers"]
+    answers_with_weight = ocr_result.get("answers_with_weight", {})
     debug_image = ocr_result["debug_image"]
 
     if isinstance(answers, list):
@@ -51,11 +52,13 @@ async def correct_exam(
 
     score = calculate_score(
         assessment_id,
-        answers
+        answers,
+        answers_with_weight
     )
 
     return {
         "answers": answers,
+        "answers_with_weight": answers_with_weight,
         "score": score,
         "debug_image": debug_image,
         "assessment_id": assessment_id,
@@ -72,6 +75,7 @@ class ConfirmCorrection(BaseModel):
     assessment_id: str
     student_id: str
     answers: dict  # Pode ser dict ou array, será convertido
+    answers_with_weight: dict = None  # Dados com tipo e peso
 
 
 class MarkAbsentRequest(BaseModel):
@@ -158,6 +162,8 @@ def confirm_correction(
 
     # Converter answers de array para dict se necessário
     answers = data.answers
+    answers_with_weight = data.answers_with_weight or {}
+    
     # 🔥 Corrige lista
     if isinstance(answers, list):
         answers = {str(i + 1): v for i, v in enumerate(answers)}
@@ -168,7 +174,8 @@ def confirm_correction(
     
     score = calculate_score(
         data.assessment_id,
-        answers
+        answers,
+        answers_with_weight
     )
 
     # Buscar class_id da avaliacao

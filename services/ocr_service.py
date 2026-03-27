@@ -178,16 +178,23 @@ def read_answer_sheet(image_path, gabarito):
         ]
 
         if len(marcadas) == 0:
-
-            respostas_detectadas.append("BRANCO")
+            # Sem marcação - peso 0
+            respostas_detectadas.append({
+                "type": "BRANCO",
+                "answer": None,
+                "weight": 0
+            })
 
         elif len(marcadas) > 1:
-
-            respostas_detectadas.append("ANULADA")
+            # Múltiplas marcações - peso 0
+            respostas_detectadas.append({
+                "type": "MULTIPLA",
+                "answer": None,
+                "weight": 0
+            })
 
             for idx in marcadas:
                 cx, cy = centros[idx]
-
                 cv2.circle(
                     debug_overlay,
                     (cx + left, cy + top),
@@ -197,15 +204,17 @@ def read_answer_sheet(image_path, gabarito):
                 )
 
         else:
-
+            # Uma marcação - peso 1
             idx = marcadas[0]
-
-            respostas_detectadas.append(
-                ["A","B","C","D","E"][idx]
-            )
+            answer = ["A","B","C","D","E"][idx]
+            
+            respostas_detectadas.append({
+                "type": "MARCADA",
+                "answer": answer,
+                "weight": 1
+            })
 
             cx, cy = centros[idx]
-
             cv2.circle(
                 debug_overlay,
                 (cx + left, cy + top),
@@ -226,9 +235,22 @@ def read_answer_sheet(image_path, gabarito):
         )
 
     answers_dict = {}
+    answers_with_weight = {}
 
-    for i,resp in enumerate(respostas_detectadas):
-        answers_dict[str(i+1)] = resp
+    for i, resp in enumerate(respostas_detectadas):
+        question_num = str(i+1)
+        
+        # Para compatibilidade, manter apenas a resposta
+        if isinstance(resp, dict):
+            answers_dict[question_num] = resp["answer"] or resp["type"]
+            answers_with_weight[question_num] = resp
+        else:
+            answers_dict[question_num] = resp
+            answers_with_weight[question_num] = {
+                "type": "MARCADA" if resp in ["A","B","C","D","E"] else resp,
+                "answer": resp if resp in ["A","B","C","D","E"] else None,
+                "weight": 1 if resp in ["A","B","C","D","E"] else 0
+            }
 
     import base64
 
@@ -237,5 +259,6 @@ def read_answer_sheet(image_path, gabarito):
 
     return {
         "answers": answers_dict,
+        "answers_with_weight": answers_with_weight,
         "debug_image": debug_base64
     }
