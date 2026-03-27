@@ -162,7 +162,7 @@ def confirm_correction(
 
     # Converter answers de array para dict se necessário
     answers = data.answers
-    answers_with_weight = data.answers_with_weight or {}
+    answers_with_weight = data.answers_with_weight
     
     # 🔥 Corrige lista
     if isinstance(answers, list):
@@ -175,7 +175,7 @@ def confirm_correction(
     score = calculate_score(
         data.assessment_id,
         answers,
-        answers_with_weight
+        answers_with_weight if answers_with_weight else None
     )
 
     # Buscar class_id da avaliacao
