@@ -49,9 +49,4 @@ def calculate_score(assessment_id, answers, answers_with_weight=None):
                 correct_count += 1
 
     # Calcular score de 0-10 baseado no número de acertos
-    if total_weight > 0:
-        score = (correct_count / total_weight) * 10
-    else:
-        score = 0
-
-    return round(score, 2)
+    return int(correct_count)
