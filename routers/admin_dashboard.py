@@ -5,14 +5,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/dashboard", tags=["Admin Dashboard"])
+router = APIRouter(prefix="/admin", tags=["Admin Dashboard"])
 
 
 # ==========================
 # KPIs GERAIS DA ESCOLA
 # ==========================
 
-@router.get("/overview")
+@router.get("/dashboard/overview")
 def get_dashboard_overview(user=Depends(get_current_user)):
     """Retorna KPIs gerais da escola para o admin"""
     
@@ -83,7 +83,7 @@ def get_dashboard_overview(user=Depends(get_current_user)):
 # MONITORAMENTO POR TURMA
 # ==========================
 
-@router.get("/classes")
+@router.get("/dashboard/classes")
 def get_classes_monitoring(user=Depends(get_current_user)):
     """Retorna monitoramento de todas as turmas com ranking"""
     
@@ -144,7 +144,7 @@ def get_classes_monitoring(user=Depends(get_current_user)):
 # MONITORAMENTO DE ALUNOS
 # ==========================
 
-@router.get("/students")
+@router.get("/dashboard/students")
 def get_students_monitoring(
     user=Depends(get_current_user),
     status: str = None,
@@ -231,7 +231,7 @@ def get_students_monitoring(
 # MONITORAMENTO DE PROFESSORES
 # ==========================
 
-@router.get("/teachers")
+@router.get("/dashboard/teachers")
 def get_teachers_monitoring(user=Depends(get_current_user)):
     """Retorna desempenho de professores"""
     
@@ -310,7 +310,7 @@ def get_teachers_monitoring(user=Depends(get_current_user)):
 # ALERTAS DE RISCO
 # ==========================
 
-@router.get("/alerts")
+@router.get("/dashboard/alerts")
 def get_alerts(user=Depends(get_current_user)):
     """Retorna alertas de risco (alunos em risco, frequência baixa, etc)"""
     
@@ -356,4 +356,74 @@ def get_alerts(user=Depends(get_current_user)):
     
     except Exception as e:
         logger.error(f"Erro ao buscar alertas: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar dados: {str(e)}")
+
+
+# ==========================
+# ENDPOINTS SIMPLES PARA SELETORES
+# ==========================
+
+@router.get("/classes")
+def get_classes_list(user=Depends(get_current_user)):
+    """Retorna lista simples de turmas para seletor"""
+    
+    if user["role"] not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    
+    try:
+        school_id = user["school_id"]
+        
+        classes = supabase.table("classes") \
+            .select("id, name") \
+            .eq("school_id", school_id) \
+            .execute()
+        
+        return classes.data or []
+    
+    except Exception as e:
+        logger.error(f"Erro ao buscar turmas: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar dados: {str(e)}")
+
+
+@router.get("/students")
+def get_students_list(user=Depends(get_current_user)):
+    """Retorna lista simples de alunos para seletor"""
+    
+    if user["role"] not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    
+    try:
+        school_id = user["school_id"]
+        
+        students = supabase.table("students") \
+            .select("id, name") \
+            .eq("school_id", school_id) \
+            .execute()
+        
+        return students.data or []
+    
+    except Exception as e:
+        logger.error(f"Erro ao buscar alunos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar dados: {str(e)}")
+
+
+@router.get("/teachers")
+def get_teachers_list(user=Depends(get_current_user)):
+    """Retorna lista simples de professores para seletor"""
+    
+    if user["role"] not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    
+    try:
+        school_id = user["school_id"]
+        
+        teachers = supabase.table("teachers") \
+            .select("id, name") \
+            .eq("school_id", school_id) \
+            .execute()
+        
+        return teachers.data or []
+    
+    except Exception as e:
+        logger.error(f"Erro ao buscar professores: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao buscar dados: {str(e)}")
