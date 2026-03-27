@@ -242,7 +242,7 @@ def get_teachers_monitoring(user=Depends(get_current_user)):
         school_id = user["school_id"]
         
         # Buscar professores
-        teachers = supabase.table("teachers") \
+        teachers = supabase.table("v_teachers") \
             .select("id, name") \
             .eq("school_id", school_id) \
             .execute()
@@ -417,7 +417,7 @@ def get_teachers_list(user=Depends(get_current_user)):
     try:
         school_id = user["school_id"]
         
-        teachers = supabase.table("teachers") \
+        teachers = supabase.table("v_teachers") \
             .select("id, name") \
             .eq("school_id", school_id) \
             .execute()
