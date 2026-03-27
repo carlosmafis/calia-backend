@@ -131,7 +131,7 @@ def student_results(user=Depends(get_current_user)):
     
     # Buscar submissões do aluno com informações da avaliação
     data = supabase.table("student_submissions") \
-        .select("id, score, created_at, assessment_id, assessments(title, subject_id, subjects(name))") \
+        .select("id, score, created_at, assessment_id, status, extracted_answers, assessments(id, title, subject_id, questions, subjects(name))") \
         .eq("student_id", student_id) \
         .eq("school_id", user["school_id"]) \
         .order("created_at", desc=True) \
@@ -146,13 +146,37 @@ def student_results(user=Depends(get_current_user)):
         assessment = submission.get("assessments", {})
         subject = assessment.get("subjects", {}) if isinstance(assessment.get("subjects"), dict) else {}
         
+        # Calcular acertos e erros
+        extracted_answers = submission.get("extracted_answers", {})
+        questions = assessment.get("questions", [])
+        
+        correct_count = 0
+        wrong_count = 0
+        total_questions = len(questions) if questions else 0
+        
+        if extracted_answers and questions:
+            for q in questions:
+                q_id = str(q.get("id", ""))
+                answer = extracted_answers.get(q_id)
+                correct_answer = q.get("correct_answer")
+                
+                if answer and correct_answer:
+                    if answer == correct_answer:
+                        correct_count += 1
+                    else:
+                        wrong_count += 1
+        
         results.append({
             "id": submission["id"],
             "score": submission["score"],
             "assessment_title": assessment.get("title", "Avaliação"),
             "subject_name": subject.get("name", "") if subject else "",
             "date": submission["created_at"],
-            "assessment_id": submission["assessment_id"]
+            "assessment_id": submission["assessment_id"],
+            "status": submission.get("status", "pending"),
+            "correct_count": correct_count,
+            "wrong_count": wrong_count,
+            "total_questions": total_questions
         })
     
     return results
