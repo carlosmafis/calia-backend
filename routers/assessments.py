@@ -38,7 +38,29 @@ class AssessmentCreate(BaseModel):
 def list_assessments(user=Depends(get_current_user)):
 
     if user["role"] == "professor":
-        # Professor vê avaliações que criou OU onde é professor titular
+        # Professor vê avaliações:
+        # 1. Das suas turmas (como professor da disciplina)
+        # 2. Que criou (como professor aplicador)
+        # 3. Onde é professor titular
+        
+        # Buscar turmas do professor
+        teacher_classes = supabase.table("teacher_classes") \
+            .select("class_id") \
+            .eq("teacher_id", user["id"]) \
+            .execute()
+        
+        class_ids = [tc["class_id"] for tc in (teacher_classes.data or [])]
+        
+        # Buscar avaliações das turmas do professor
+        assessments_by_class = []
+        if class_ids:
+            data = supabase.table("assessments") \
+                .select("*") \
+                .eq("school_id", user["school_id"]) \
+                .in_("class_id", class_ids) \
+                .execute()
+            assessments_by_class = data.data or []
+        
         # Buscar avaliações criadas pelo professor (como professor aplicador)
         assessments_created = supabase.table("assessments") \
             .select("*") \
@@ -54,7 +76,7 @@ def list_assessments(user=Depends(get_current_user)):
             .execute()
         
         # Combinar e remover duplicatas
-        all_assessments = (assessments_created.data or []) + (assessments_as_titular.data or [])
+        all_assessments = assessments_by_class + (assessments_created.data or []) + (assessments_as_titular.data or [])
         seen_ids = set()
         unique_assessments = []
         for a in all_assessments:
