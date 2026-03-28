@@ -27,7 +27,6 @@ class AssessmentCreate(BaseModel):
     title: str
     questions: List[QuestionItem]
     bimestre: int = 1  # 1, 2, 3 ou 4
-    titular_id: str = None  # ID do professor titular (opcional)
 
 
 # ==========================
@@ -38,53 +37,24 @@ class AssessmentCreate(BaseModel):
 def list_assessments(user=Depends(get_current_user)):
 
     if user["role"] == "professor":
-        # Professor vê avaliações:
-        # 1. Das suas turmas (como professor da disciplina)
-        # 2. Que criou (como professor aplicador)
-        # 3. Onde é professor titular
-        
-        # Buscar turmas do professor
+        # Professor vê avaliações das suas turmas
         teacher_classes = supabase.table("teacher_classes") \
             .select("class_id") \
             .eq("teacher_id", user["id"]) \
             .execute()
-        
+
         class_ids = [tc["class_id"] for tc in (teacher_classes.data or [])]
-        
-        # Buscar avaliações das turmas do professor
-        assessments_by_class = []
-        if class_ids:
-            data = supabase.table("assessments") \
-                .select("*") \
-                .eq("school_id", user["school_id"]) \
-                .in_("class_id", class_ids) \
-                .execute()
-            assessments_by_class = data.data or []
-        
-        # Buscar avaliações criadas pelo professor (como professor aplicador)
-        assessments_created = supabase.table("assessments") \
+
+        if not class_ids:
+            return []
+
+        data = supabase.table("assessments") \
             .select("*") \
             .eq("school_id", user["school_id"]) \
-            .eq("created_by", user["id"]) \
+            .in_("class_id", class_ids) \
             .execute()
-        
-        # Buscar avaliações onde professor é titular
-        assessments_as_titular = supabase.table("assessments") \
-            .select("*") \
-            .eq("school_id", user["school_id"]) \
-            .eq("titular_id", user["id"]) \
-            .execute()
-        
-        # Combinar e remover duplicatas
-        all_assessments = assessments_by_class + (assessments_created.data or []) + (assessments_as_titular.data or [])
-        seen_ids = set()
-        unique_assessments = []
-        for a in all_assessments:
-            if a["id"] not in seen_ids:
-                seen_ids.add(a["id"])
-                unique_assessments.append(a)
-        
-        return unique_assessments
+
+        return data.data
 
     # Admin e super_admin veem tudo da escola
     data = supabase.table("assessments") \
@@ -157,7 +127,7 @@ def create_assessment_full(data: AssessmentCreate, user=Depends(get_current_user
         raise HTTPException(status_code=400, detail="questions não pode estar vazio")
 
     try:
-        assessment_data = {
+        assessment = supabase.table("assessments").insert({
             "school_id": user["school_id"],
             "class_id": data.class_id,
             "subject_id": data.subject_id,
@@ -165,13 +135,7 @@ def create_assessment_full(data: AssessmentCreate, user=Depends(get_current_user
             "title": data.title.strip(),
             "total_questions": len(data.questions),
             "bimestre": data.bimestre
-        }
-        
-        # Adicionar professor aplicador se fornecido
-        if data.titular_id:
-            assessment_data["titular_id"] = data.titular_id
-        
-        assessment = supabase.table("assessments").insert(assessment_data).execute().data[0]
+        }).execute().data[0]
 
         rows = []
         for q in data.questions:
@@ -307,7 +271,6 @@ class AssessmentUpdate(BaseModel):
     title: str = None
     questions: List[QuestionItem] = None
     bimestre: int = None  # 1, 2, 3 ou 4
-    titular_id: str = None  # ID do professor titular (opcional)
 
 
 @router.put("/{assessment_id}")
@@ -327,15 +290,11 @@ def update_assessment(assessment_id: str, data: AssessmentUpdate, user=Depends(g
         if not assessment.data:
             raise HTTPException(status_code=404, detail="Avaliação não encontrada")
         
-        # Verificar permissão (criador, professor aplicador ou admin)
-        is_creator = assessment.data["created_by"] == user["id"]
-        is_titular = assessment.data.get("titular_id") == user["id"]
-        is_admin = user["role"] in ("admin", "super_admin")
-        
-        if not (is_creator or is_titular or is_admin):
+        # Verificar permissão (apenas criador ou admin)
+        if user["role"] not in ("admin", "super_admin") and assessment.data["created_by"] != user["id"]:
             raise HTTPException(status_code=403, detail="Sem permissão para editar esta avaliação")
         
-        # Atualizar título, bimestre e/ou professor aplicador se fornecidos
+        # Atualizar título e/ou bimestre se fornecidos
         update_data = {}
         if data.title:
             update_data["title"] = data.title.strip()
@@ -343,8 +302,6 @@ def update_assessment(assessment_id: str, data: AssessmentUpdate, user=Depends(g
             if data.bimestre not in (1, 2, 3, 4):
                 raise HTTPException(status_code=400, detail="Bimestre deve ser 1, 2, 3 ou 4")
             update_data["bimestre"] = data.bimestre
-        if data.titular_id is not None:
-            update_data["titular_id"] = data.titular_id if data.titular_id else None
         
         if update_data:
             supabase.table("assessments") \
