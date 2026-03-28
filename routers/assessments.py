@@ -396,3 +396,105 @@ def delete_assessment(assessment_id: str, user=Depends(get_current_user)):
         logger.error(f"Error deleting assessment: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao deletar avaliação: {str(e)}")
 
+
+
+# ==========================
+# ANULAR QUESTÃO
+# ==========================
+
+class AnnulQuestionRequest(BaseModel):
+    question_number: int
+
+
+@router.post("/{assessment_id}/annul-question")
+def annul_question(
+    assessment_id: str,
+    data: AnnulQuestionRequest,
+    user=Depends(get_current_user)
+):
+    """Anula uma questão e atualiza as notas de todos os alunos corrigidos"""
+    
+    try:
+        # Verificar permissão
+        assessment = supabase.table("assessments") \
+            .select("*") \
+            .eq("id", assessment_id) \
+            .single() \
+            .execute()
+        
+        if not assessment.data:
+            raise HTTPException(status_code=404, detail="Avaliação não encontrada")
+        
+        # Buscar todas as submissões da avaliação
+        submissions = supabase.table("student_submissions") \
+            .select("*") \
+            .eq("assessment_id", assessment_id) \
+            .execute()
+        
+        if not submissions.data:
+            return {"message": "Nenhuma submissão para atualizar", "updated_count": 0}
+        
+        # Para cada submissão, atualizar o score
+        from services.grading_service import calculate_score
+        
+        updated_count = 0
+        for submission in submissions.data:
+            try:
+                # Obter respostas
+                answers = submission.get("extracted_answers", {})
+                if isinstance(answers, str):
+                    import json
+                    answers = json.loads(answers)
+                
+                # Criar answers_with_weight com a questão anulada
+                answers_with_weight = {}
+                
+                # Buscar gabarito
+                questions = supabase.table("assessment_questions") \
+                    .select("*") \
+                    .eq("assessment_id", assessment_id) \
+                    .execute()
+                
+                for q in (questions.data or []):
+                    q_num = str(q["question_number"])
+                    answer = answers.get(q_num, "BRANCO")
+                    
+                    if q["question_number"] == data.question_number:
+                        # Marcar como anulada
+                        answers_with_weight[q_num] = {
+                            "type": "ANULADA",
+                            "answer": None,
+                            "weight": 1
+                        }
+                    else:
+                        # Manter resposta original
+                        answers_with_weight[q_num] = {
+                            "type": "MARCADA" if answer in ["A","B","C","D","E"] else answer,
+                            "answer": answer if answer in ["A","B","C","D","E"] else None,
+                            "weight": 1 if answer in ["A","B","C","D","E"] else 0
+                        }
+                
+                # Recalcular score
+                new_score = calculate_score(assessment_id, answers, answers_with_weight)
+                
+                # Atualizar submissão
+                supabase.table("student_submissions") \
+                    .update({"score": new_score}) \
+                    .eq("id", submission["id"]) \
+                    .execute()
+                
+                updated_count += 1
+            except Exception as e:
+                logger.error(f"Erro ao atualizar submissão {submission['id']}: {str(e)}")
+                continue
+        
+        return {
+            "message": f"Questão {data.question_number} anulada com sucesso",
+            "updated_count": updated_count
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao anular questão: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao anular questão: {str(e)}")
