@@ -34,7 +34,7 @@ def calculate_score(assessment_id, answers, answers_with_weight=None):
             total_weight += weight
             
             # ANULADA sempre conta como acerto
-            if resp_type == "ANULADA":
+            if resp_type == "ANULADA" or resp_type == "ANULAR":
                 correct_count += weight
             # BRANCO e MULTIPLA não contam (peso 0)
             elif weight == 0:

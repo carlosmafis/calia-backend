@@ -246,10 +246,12 @@ def read_answer_sheet(image_path, gabarito):
             answers_with_weight[question_num] = resp
         else:
             answers_dict[question_num] = resp
+            # Converter ANULAR para ANULADA para consistência
+            resp_type = "ANULADA" if resp == "ANULAR" else ("MARCADA" if resp in ["A","B","C","D","E"] else resp)
             answers_with_weight[question_num] = {
-                "type": "MARCADA" if resp in ["A","B","C","D","E"] else resp,
+                "type": resp_type,
                 "answer": resp if resp in ["A","B","C","D","E"] else None,
-                "weight": 1 if resp in ["A","B","C","D","E"] else 0
+                "weight": 1 if resp in ["A","B","C","D","E","ANULAR"] else 0
             }
 
     import base64
