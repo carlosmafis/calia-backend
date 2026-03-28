@@ -27,6 +27,7 @@ class AssessmentCreate(BaseModel):
     title: str
     questions: List[QuestionItem]
     bimestre: int = 1  # 1, 2, 3 ou 4
+    shared_with: str = None  # ID do professor para compartilhar (opcional)
 
 
 # ==========================
@@ -37,7 +38,9 @@ class AssessmentCreate(BaseModel):
 def list_assessments(user=Depends(get_current_user)):
 
     if user["role"] == "professor":
-        # Professor vê avaliações das suas turmas
+        # Professor vê avaliações:
+        # 1. Das suas turmas
+        # 2. Compartilhadas com ele
         teacher_classes = supabase.table("teacher_classes") \
             .select("class_id") \
             .eq("teacher_id", user["id"]) \
@@ -45,16 +48,33 @@ def list_assessments(user=Depends(get_current_user)):
 
         class_ids = [tc["class_id"] for tc in (teacher_classes.data or [])]
 
-        if not class_ids:
-            return []
-
-        data = supabase.table("assessments") \
+        # Avaliações das turmas do professor
+        assessments_by_class = []
+        if class_ids:
+            data = supabase.table("assessments") \
+                .select("*") \
+                .eq("school_id", user["school_id"]) \
+                .in_("class_id", class_ids) \
+                .execute()
+            assessments_by_class = data.data or []
+        
+        # Avaliações compartilhadas com o professor
+        shared_assessments = supabase.table("assessments") \
             .select("*") \
             .eq("school_id", user["school_id"]) \
-            .in_("class_id", class_ids) \
+            .eq("shared_with", user["id"]) \
             .execute()
-
-        return data.data
+        
+        # Combinar e remover duplicatas
+        all_assessments = assessments_by_class + (shared_assessments.data or [])
+        seen_ids = set()
+        unique_assessments = []
+        for a in all_assessments:
+            if a["id"] not in seen_ids:
+                seen_ids.add(a["id"])
+                unique_assessments.append(a)
+        
+        return unique_assessments
 
     # Admin e super_admin veem tudo da escola
     data = supabase.table("assessments") \
@@ -127,7 +147,7 @@ def create_assessment_full(data: AssessmentCreate, user=Depends(get_current_user
         raise HTTPException(status_code=400, detail="questions não pode estar vazio")
 
     try:
-        assessment = supabase.table("assessments").insert({
+        assessment_data = {
             "school_id": user["school_id"],
             "class_id": data.class_id,
             "subject_id": data.subject_id,
@@ -135,7 +155,13 @@ def create_assessment_full(data: AssessmentCreate, user=Depends(get_current_user
             "title": data.title.strip(),
             "total_questions": len(data.questions),
             "bimestre": data.bimestre
-        }).execute().data[0]
+        }
+        
+        # Adicionar shared_with se fornecido
+        if data.shared_with:
+            assessment_data["shared_with"] = data.shared_with
+        
+        assessment = supabase.table("assessments").insert(assessment_data).execute().data[0]
 
         rows = []
         for q in data.questions:

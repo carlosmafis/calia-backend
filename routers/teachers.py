@@ -326,3 +326,27 @@ async def upload_teachers(
         "errors": errors,
         "credentials": credentials_list
     }
+
+
+
+# ==========================
+# LISTAR PROFESSORES DA ESCOLA (para compartilhamento)
+# ==========================
+
+@router.get("/school/list")
+def list_teachers_by_school(user=Depends(get_current_user)):
+    """
+    Lista todos os professores da mesma escola.
+    Qualquer usuário pode acessar para compartilhar avaliações.
+    """
+    
+    try:
+        teachers = supabase.table("profiles") \
+            .select("id, name, email") \
+            .eq("school_id", user["school_id"]) \
+            .eq("role", "professor") \
+            .execute()
+        
+        return teachers.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao listar professores: {str(e)}")
